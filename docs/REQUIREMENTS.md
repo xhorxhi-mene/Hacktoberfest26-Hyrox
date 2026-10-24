@@ -1,0 +1,174 @@
+# 📐 Requisiti
+
+## ⚙️ Requisiti non funzionali
+
+- **NF01)** Le chiavi API devono risiedere esclusivamente sul server (file `.env`) e non essere mai esposte al client.
+- **NF02)** I file immagine temporanei caricati sul server devono essere sovrascritti o cancellati per evitare saturazione dello storage.
+- **NF03)** Il sistema deve fornire un feedback visivo (stato di caricamento) durante l'attesa della risposta dell'API, che può richiedere diversi secondi.
+- **NF04)** Il server non deve salvare foto né itinerari su disco/database; ogni richiesta deve contenere l'intero contesto.
+
+## ✅ Requisiti funzionali
+
+### 📌 Must have
+
+- **M01)** Il sistema deve accettare fino a 6 immagini (JPG, PNG, WEBP, HEIC), max 10 MB l'una, validandone il reale contenuto (non solo l'estensione), gestendo la rotazione EXIF e ridimensionandole a 1024 px.
+- **M02)** Il sistema deve raccogliere i seguenti parametri tramite form:
+  - Budget: basso, medio, alto
+  - Durata: giorni
+  - Stagione: Primavera, Estate, Autunno, Inverno
+  - Scopo: Divertimento, Cultura, Mix
+  - Numero di persone
+  - Note (opzionali, es. esigenze di accessibilità, bambini, disabili)
+- **M03)** Il backend deve inoltrare le immagini e i parametri all'API di Google Gemini (modello Gemma 4) per l'identificazione del luogo e la generazione del testo.
+- **M04)** L'interfaccia deve estrarre e mostrare a schermo il nome della destinazione identificata.
+- **M05)** Il sistema deve generare e forzare il download dell'itinerario in formato Markdown.
+
+---
+
+# 🎭 Casi d'uso
+
+## 🖼️ Use Case: CaricamentoImmagini
+
+**Primary Actor:** Utente
+
+**Preconditions:**
+L'utente si trova sulla pagina principale dell'applicazione e ha a disposizione i file immagine da caricare.
+
+**Flow of Events:**
+1. L'utente clicca sul pulsante "Sfoglia".
+2. Il sistema apre la finestra di selezione dei file del dispositivo locale.
+3. L'utente seleziona una o più foto (fino a un massimo di 6).
+4. Il sistema verifica che i formati corrispondano a JPG, PNG, WEBP o HEIC e che nessun file superi i 10 MB.
+5. Il sistema elabora i file e mostra a schermo l'anteprima delle immagini caricate (es. miniatura "Foto 1" raffigurante la Statua della Libertà).
+
+**Postconditions:**
+Le immagini sono state validate, ridimensionate e memorizzate in memoria (non su disco) per la successiva elaborazione.
+
+**Alternative Flow 1 — Formato o dimensioni non validi:**
+Al passo 4, se un'immagine non rispetta i vincoli di estensione o supera i 10 MB, il sistema mostra un messaggio di errore e richiede di selezionare un file valido.
+
+---
+
+## 🧭 Use Case: ConfigurazionePreferenze
+
+**Primary Actor:** Utente
+
+**Preconditions:**
+L'utente ha caricato con successo almeno un'immagine (UC1).
+
+**Flow of Events:**
+1. L'utente compila i campi del form: Budget (basso, medio, alto), Durata (giorni), Stagione (Primavera, Estate, Autunno, Inverno), Scopo (Divertimento, Cultura, Mix), Numero di persone.
+2. L'utente può aggiungere note opzionali (es. esigenze di accessibilità, bambini, disabili).
+3. L'utente invia i dati (tramite un'azione implicita o la pressione di un pulsante di generazione).
+4. Il sistema valida i parametri (es. numero di persone >= 1).
+5. Il sistema registra correttamente i parametri nel form e li rende pronti per l'invio.
+
+**Postconditions:**
+I parametri sono validati e pronti per la generazione dell'itinerario.
+
+**Alternative Flow 1 — Valore numerico non valido:**
+Al passo 4, se il campo "Persone" riceve un input non numerico o inferiore a 1, il sistema ripristina il valore di default o mostra un messaggio di validazione.
+
+**Alternative Flow 2:**
+Tutti i parametri del viaggio sono registrati correttamente nel form e pronti per l'invio.
+
+---
+
+## 🗺️ Use Case: GeneraItinerario
+
+**Primary Actor:** Utente
+
+**Preconditions:**
+L'utente ha caricato con successo almeno un'immagine (UC1) e compilato i campi obbligatori delle preferenze di viaggio (UC2).
+
+**Flow of Events:**
+1. L'utente invia i dati (tramite un'azione implicita o la pressione di un pulsante di generazione).
+2. Il sistema trasmette le foto caricate e i parametri di viaggio (Durata, Budget, Periodo, Scopo, Persone, Note) al Servizio AI (Gemma 4).
+3. Il Servizio AI analizza le immagini ed esegue il riconoscimento dei posti e dei monumenti.
+4. Il Servizio AI elabora un itinerario personalizzato incrociando i luoghi identificati con i filtri e le note forniti dall'utente.
+5. Il sistema riceve l'itinerario testuale generato dall'AI e lo renderizza a schermo.
+
+**Postconditions:**
+L'itinerario è visualizzato a schermo e il pulsante "Scarica Itinerario (.md)" è abilitato.
+
+**Alternative Flow 1 — Immagini non riconoscibili:**
+Al passo 3, se il Servizio AI non riesce a identificare alcun luogo noto nelle foto fornite, il sistema restituisce un messaggio chiedendo all'utente di caricare immagini più chiare o iconiche.
+
+**Alternative Flow 2 — Timeout o errore API:**
+Al passo 2 o 4, se la comunicazione con Gemma 4 fallisce, il sistema interrompe l'attesa e mostra un avviso di errore tecnico, invitando a riprovare.
+
+**Alternative Flow 3:**
+L'utente visualizza a schermo l'itinerario di viaggio generato su misura dal Servizio AI.
+
+---
+
+## 💾 Use Case: ScaricaItinerario
+
+**Primary Actor:** Utente
+
+**Preconditions:**
+Il sistema ha generato con successo l'itinerario (UC3 completato) e il testo è visibile a schermo. Il pulsante "Scarica Itinerario (.md)" è abilitato nell'interfaccia.
+
+**Flow of Events:**
+1. L'utente clicca sul pulsante di download.
+2. Il sistema recupera il testo in formato Markdown.
+3. Il sistema crea un file locale di tipo Blob (Binary Large Object) contenente il testo dell'itinerario.
+4. Il sistema assegna un nome coerente al file (es. `Itinerario_Roma_Italia.md`, basato sulla destinazione identificata).
+5. Il sistema avvia il download del file sul dispositivo locale dell'utente.
+
+**Postconditions:**
+Il file `.md` contenente l'itinerario generato è salvato fisicamente sul dispositivo dell'utente. L'applicazione rimane nello stato di visualizzazione dei risultati, pronta per un'eventuale nuova ricerca.
+
+**Alternative Flow 1 — Blocco download del browser:**
+Se il browser dell'utente blocca l'azione di salvataggio file (es. restrizioni di sicurezza o blocco pop-up), il sistema mostra un messaggio di avviso che spiega come abilitare il download, oppure mostra il testo in una casella copiabile manualmente.
+
+---
+
+## 📊 Diagramma dei casi d'uso
+
+*[Nel documento originale è presente un'immagine del diagramma dei casi d'uso. Di seguito la descrizione testuale.]*
+
+**Attore:** Utente
+
+**Casi d'uso collegati:**
+- CaricamentoImmagini
+- ConfigurazionePreferenze
+- GeneraItinerario
+- ScaricaItinerario
+
+---
+
+# 🧩 Carte CRC (Class-Responsibility-Collaboration)
+
+## 🧱 Scheda 1: AppController (`app.py`)
+
+| Responsabilità | Collaboratori |
+|---|---|
+| Definire e proteggere le route REST (`/api/recognize`, `/api/itinerary`, `/api/modify`). | `rate_limit.py` |
+| Estrarre dati dalle richieste HTTP (File form, JSON). | `validation.py` |
+| Passare le immagini per la pre-elaborazione. | `image_utils.py` |
+| Invocare il servizio AI in base all'endpoint. | `gemini_service.py` |
+| Raccogliere i risultati e formattare le risposte JSON di errore o successo. | `markdown_builder.py` |
+
+---
+
+## 🤖 Scheda 2: GeminiService (`gemini_service.py`)
+
+| Responsabilità | Collaboratori |
+|---|---|
+| Inizializzare il client `google-genai` con le flag (`USE_GOOGLE_SEARCH`, `USE_THINKING`). | `.env` |
+| Intercettare `MOCK_MODE=1` e restituire dati statici invece di chiamare l'API. | `prompts.py` |
+| Costruire i prompt combinando istruzioni di sistema, immagini e input utente. | `prompts.py` |
+| Gestire eccezioni specifiche dell'API (Quota, Timeout) traducendole in italiano. | Nessuno |
+| Ripulire e parsare l'output AI (es. correzione JSON malformati con retry). | Nessuno |
+
+---
+
+## 🖼️ Scheda 3: ImageUtils (`image_utils.py`)
+
+| Responsabilità | Collaboratori |
+|---|---|
+| Verificare l'effettivo "magic number" del file per impedire upload nocivi (es. finti `.jpg`). | File System locale (in memoria) |
+| Convertire file HEIC in JPEG standard. | `pillow-heif` |
+| Leggere i dati EXIF e ruotare l'immagine correttamente. | Pillow (PIL) |
+| Ridimensionare l'immagine (es. max 1024 px) riducendo il payload per la Gemini API. | Pillow (PIL) |
