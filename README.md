@@ -1,6 +1,6 @@
 # 📘 Documentazione del progetto 
 
-## 📸 Photo Travel Planner
+## 📸 Pics Travel Planner
 
 Carica le foto di luoghi, monumenti e piatti tipici: **Gemma 4** riconosce dove si trovano e crea un itinerario su misura per budget, stagione, scopo del viaggio, durata e numero di persone. 
 
