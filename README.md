@@ -4,6 +4,8 @@ Carica le foto di luoghi, monumenti e piatti tipici: **Gemma 4** riconosce dove 
 
 Progetto creato per **Hacktoberfest Hack Day Pisa × GDG Pisa** (sfida *Best Open-Source AI Project*).
 
+📊 [Presentazione del progetto (PDF)](Presentazione_Hyrox_Team_Travel.pdf)
+
 ## Come funziona
 
 1. **Foto e preferenze:** l'utente aggiunge fino a 6 foto (JPG, PNG, WEBP o HEIC dell'iPhone, max 10 MB ciascuna), una alla volta o trascinandole, e può rimuoverle con ✕. Poi sceglie:
