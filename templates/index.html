@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photo Travel Planner</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="hero">
+    <h1>📸 Photo Travel Planner</h1>
+    <p>Carica le foto dei posti che sogni: Gemma 4 li riconosce e crea il tuo itinerario.</p>
+    {% if mock %}<p class="badge">MOCK_MODE attivo: dati di prova, nessuna chiamata all'API</p>{% endif %}
+  </header>
+
+  <main>
+    <form id="trip-form" class="card">
+      <!-- 1. Foto -->
+      <section>
+        <h2>1. Le tue foto</h2>
+        <label class="dropzone" for="images">
+          <input id="images" name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple>
+          <span>Clicca per scegliere fino a {{ max_images }} foto (JPG, PNG, WEBP · max 5 MB l'una)</span>
+        </label>
+        <div id="previews" class="previews"></div>
+      </section>
+
+      <!-- 2. Preferenze -->
+      <section>
+        <h2>2. Il tuo viaggio</h2>
+        <div class="grid">
+          <label>Durata
+            <select name="days">
+              <option value="3">3 giorni</option>
+              <option value="4">4 giorni</option>
+              <option value="5">5 giorni</option>
+            </select>
+          </label>
+          <label>Budget
+            <select name="budget">
+              <option value="basso">Basso</option>
+              <option value="medio" selected>Medio</option>
+              <option value="alto">Alto</option>
+            </select>
+          </label>
+          <label>Periodo
+            <select name="season">
+              <option value="estate">Estate</option>
+              <option value="inverno">Inverno</option>
+            </select>
+          </label>
+          <label>Scopo
+            <select name="purpose">
+              <option value="cultura">Cultura</option>
+              <option value="divertimento">Divertimento</option>
+              <option value="mix" selected>Mix</option>
+            </select>
+          </label>
+          <label>Persone
+            <input name="people" type="number" min="1" max="{{ max_people }}" value="2" required>
+          </label>
+        </div>
+        <label class="full">Note (facoltative)
+          <textarea name="notes" rows="2" maxlength="500" placeholder="Es. viaggiamo con un bambino, siamo vegetariani, niente musei troppo lunghi…"></textarea>
+        </label>
+      </section>
+
+      <button id="submit-btn" type="submit">Crea il mio itinerario ✨</button>
+      <p id="status" class="status" role="status"></p>
+    </form>
+
+    <!-- 3. Luoghi riconosciuti -->
+    <section id="places-section" class="card" hidden>
+      <h2>📍 Luoghi riconosciuti</h2>
+      <p id="country" class="muted"></p>
+      <div id="places" class="places"></div>
+    </section>
+
+    <!-- 4. Itinerario -->
+    <section id="itinerary-section" class="card" hidden>
+      <div class="row">
+        <h2>🗺️ Il tuo itinerario</h2>
+        <button id="download-btn" type="button">⬇️ Scarica .md</button>
+      </div>
+      <article id="itinerary" class="itinerary"></article>
+    </section>
+  </main>
+
+  <footer>Progetto open source per Hacktoberfest Hack Day Pisa · Gemma 4 via Gemini API</footer>
+
+  <script>window.MAX_IMAGES = {{ max_images }};</script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
