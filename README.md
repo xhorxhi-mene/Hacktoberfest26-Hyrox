@@ -138,19 +138,6 @@ Se il browser dell'utente blocca l'azione di salvataggio file (es. restrizioni d
 
 ---
 
-# 🏗️ Progettazione Architetturale (Struttura Modulare Python)
-
-Il sistema abbandona il pattern MVC classico per un'architettura **Service-Oriented e Stateless**, basata sui moduli definiti nel README.
-
-- **`app.py` (Controller di Routing):** espone gli endpoint REST (Flask). Gestisce la ricezione delle richieste, delega la logica ai moduli specializzati e intercetta le eccezioni restituendo JSON formattati `{"error": "..."}`.
-- **`image_utils.py` (Image Processor):** gestisce la sicurezza (MIME sniffing), la conversione (Pillow / pillow-heif), la correzione dell'orientamento (EXIF) e la compressione ottimizzata per le API AI.
-- **`gemini_service.py` (AI Core Service):** wrapper per `google-genai` (modello Gemma 4). Gestisce le chiamate per riconoscimento, generazione e modifica. Implementa meccanismi di retry per JSON malformati e fallback su `prompts.py` in caso di `MOCK_MODE=1`.
-- **`validation.py` (Data Validator):** controlla la validità dei payload in ingresso (limiti di persone, coerenza dei luoghi inviati, lunghezza massima delle note e delle modifiche).
-- **`markdown_builder.py` (Output Formatter):** sanifica l'HTML generato dal modello e prepara la struttura dati `{text, markdown, html, filename}` per il client.
-- **`rate_limit.py` (Security Layer):** traccia le chiamate per IP (es. 20 req/min) proteggendo la `GEMINI_API_KEY` da abusi.
-
----
-
 # 🧩 Carte CRC (Class-Responsibility-Collaboration)
 
 ## 🧱 Scheda 1: AppController (`app.py`)
