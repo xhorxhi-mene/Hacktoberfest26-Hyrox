@@ -116,7 +116,7 @@ form.addEventListener("submit", async (event) => {
   try {
     // Passo 1: riconoscimento
     setJourneyStage("searching", "Sto esplorando il mondo", "Le tue foto sono in viaggio: stiamo cercando i luoghi che le hanno ispirate.");
-    showStatus("1/2 · Gemma sta riconoscendo i luoghi… 🔍");
+    showStatus("1/2 · Gemma sta riconoscendo i luoghi");
     const formData = new FormData();
     files.forEach((file) => formData.append("images", file));
     formData.append("days", prefs.days); // serve per capire se i luoghi stanno in un unico viaggio
@@ -131,7 +131,7 @@ form.addEventListener("submit", async (event) => {
     setJourneyStage("found", "Destinazione individuata", destination);
 
     // Passo 2: itinerario
-    showStatus("2/2 · Gemma sta creando l'itinerario (può richiedere fino a un minuto)… ✍️");
+    showStatus("2/2 · Gemma sta creando l'itinerario (può richiedere fino a un minuto)");
     const result = await callApi("/api/itinerary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
