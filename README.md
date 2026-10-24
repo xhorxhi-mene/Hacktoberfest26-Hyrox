@@ -307,10 +307,6 @@ Tutti gli errori hanno la forma `{"error": "messaggio per l'utente"}`.
 | POST | `/api/modify` | Itinerario attuale + richiesta di modifica (max 300 caratteri) → nuovo itinerario, stessa forma di `/api/itinerary` |
 | POST | `/api/download` | Markdown → file `.md` da scaricare |
 
-### 👥 Team
-
-- Nome Cognome – ruolo
-- Nome Cognome – ruolo
 
 ### 📄 Licenza
 
