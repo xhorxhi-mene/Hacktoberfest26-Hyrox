@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Pics Travel Planner | AI Powered</title>
-  <!-- Sicurezza: DOMPurify per evitare attacchi XSS quando si stampa HTML dal server -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+  <meta name="description" content="Carica le foto dei posti che sogni: Gemma 4 li riconosce e crea il tuo itinerario di viaggio.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>">
+  <!-- Sicurezza: DOMPurify è una protezione in più (il server rende già sicuro l'HTML).
+       "defer" non blocca il caricamento della pagina; se il CDN non risponde la pagina funziona lo stesso. -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>

@@ -49,18 +49,36 @@ def build_markdown(recognition, prefs, itinerary_text, sources):
 
     if sources:
         lines += ["## Fonti", ""]
-        lines += [f"- [{s['title']}]({s['url']})" for s in sources]
+        for s in sources:
+            title = re.sub(r"[\[\]]", "", s["title"]) or s["url"]  # le parentesi quadre rompono il link
+            lines.append(f"- [{title}]({s['url']})")
         lines.append("")
 
     lines += ["---", "*Orari e prezzi sono indicativi: verificali prima di partire.*", ""]
     return "\n".join(lines)
 
 
+_LINK_RE = re.compile(r'<a href="([^"]*)"')
+_IMG_RE = re.compile(r'<img alt="([^"]*)"[^>]*>')
+
+
+def _safe_link(match):
+    """Tiene solo i link http(s), aperti in una nuova scheda; gli altri (javascript:, data:...) perdono l'href."""
+    url = match.group(1)
+    if re.match(r"https?://", url, re.IGNORECASE):
+        return f'<a href="{url}" target="_blank" rel="noopener noreferrer nofollow"'
+    return "<a"
+
+
 def to_html(markdown_text):
-    """Markdown → HTML per mostrarlo nella pagina.
-    I '<' vengono neutralizzati: così eventuale HTML scritto dal modello non viene eseguito."""
+    """Markdown → HTML per mostrarlo nella pagina, sicuro anche senza DOMPurify:
+    - i '<' vengono neutralizzati, così l'HTML scritto dal modello non viene eseguito;
+    - i link non http(s) (es. javascript:) vengono disattivati;
+    - le immagini scritte dal modello diventano solo testo (niente tracciamento)."""
     safe = markdown_text.replace("<", "&lt;")
-    return md_lib.markdown(safe, extensions=["tables", "sane_lists"])
+    html = md_lib.markdown(safe, extensions=["tables", "sane_lists"])
+    html = _LINK_RE.sub(_safe_link, html)
+    return _IMG_RE.sub(lambda m: m.group(1), html)
 
 
 def make_filename(recognition, prefs):

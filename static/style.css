@@ -511,6 +511,12 @@ button:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.5); }
 .itinerary a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.2s; }
 .itinerary a:hover { border-color: var(--accent); }
 
+/* Casella "copia il testo" se il browser blocca il download */
+.copy-fallback { display: grid; gap: 10px; margin-bottom: 20px; }
+.copy-fallback[hidden] { display: none; }
+.copy-fallback textarea { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
+.copy-fallback .btn-secondary { justify-self: start; }
+
 /* --- Itinerario a card (costruite da renderItinerary in script.js) ------------------ */
 .visually-hidden {
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;

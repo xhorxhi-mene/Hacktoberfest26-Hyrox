@@ -21,9 +21,10 @@ from rate_limit import ai_limiter, limited  # noqa: E402
 from validation import (  # noqa: E402
     MAX_DAYS,
     MAX_PEOPLE,
-    parse_days,
     ValidationError,
+    check_places_text,
     normalize_recognition,
+    parse_days,
     recognized_places,
     require_places,
     validate_modify,
@@ -105,6 +106,7 @@ def itinerary():
     body = _json_body()
     recognition = normalize_recognition(body.get("recognition"), MAX_IMAGES)
     require_places(recognition)
+    check_places_text(recognition)
     prefs = validate_prefs(body.get("prefs"))
 
     result = gemini_service.generate_itinerary(recognition, prefs)
@@ -118,6 +120,7 @@ def modify():
     body = _json_body()
     recognition = normalize_recognition(body.get("recognition"), MAX_IMAGES)
     require_places(recognition)
+    check_places_text(recognition)
     prefs = validate_prefs(body.get("prefs"))
     text, request_text = validate_modify(body.get("text"), body.get("request"))
 

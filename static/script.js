@@ -47,6 +47,10 @@ input.addEventListener("change", () => {
   input.value = ""; // così si può riscegliere anche un file appena rimosso
 });
 
+// Primo controllo nel browser (il server ricontrolla il contenuto vero del file)
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+const ALLOWED_EXT = /\.(jpe?g|png|webp|heic|heif)$/i;
+
 function addFiles(fileList) {
   const problems = [];
   for (const file of fileList) {
@@ -54,6 +58,11 @@ function addFiles(fileList) {
       (f) => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
     );
     if (already) continue;
+    // Alcuni browser non riconoscono il tipo HEIC: in quel caso vale l'estensione
+    if (!ALLOWED_TYPES.includes(file.type) && !ALLOWED_EXT.test(file.name)) {
+      problems.push(`${file.name}: formato non supportato, scegli un file JPG, PNG, WEBP o HEIC.`);
+      continue;
+    }
     if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
       problems.push(`${file.name} supera ${MAX_IMAGE_MB} MB.`);
       continue;
@@ -110,6 +119,7 @@ form.addEventListener("submit", async (event) => {
 
   const prefs = readPrefs(); // letto prima di disabilitare i campi
   setBusy(true);
+  hideCopyFallback();
   placesSection.hidden = true;
   itinerarySection.hidden = true;
 
@@ -190,6 +200,11 @@ function iconSpan(icon) {
 function renderItinerary(html) {
   const tpl = document.createElement("template");
   tpl.innerHTML = window.DOMPurify ? DOMPurify.sanitize(html) : html; // HTML già reso sicuro dal server
+  // I link (es. le fonti) si aprono in una nuova scheda, così l'itinerario non si perde
+  tpl.content.querySelectorAll("a[href]").forEach((a) => {
+    a.target = "_blank";
+    a.rel = "noopener noreferrer nofollow";
+  });
   const nodes = [...tpl.content.children];
 
   // Il "---" finale separa la nota "orari indicativi"; altri "---" scritti dal modello si ignorano
@@ -430,16 +445,12 @@ function buildInfoCard(title, kind, body) {
 }
 
 // --- Download del file .md -----------------------------------------------------
-downloadBtn.addEventListener("click", async () => {
+// Il file viene creato direttamente nel browser (Blob): funziona anche se nel frattempo
+// il server è stato spento. /api/download resta disponibile per chi usa l'API.
+downloadBtn.addEventListener("click", () => {
   if (!lastResult) return;
   try {
-    const res = await fetch("/api/download", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markdown: lastResult.markdown, filename: lastResult.filename }),
-    });
-    if (!res.ok) throw new Error("Download non riuscito");
-    const blob = await res.blob();
+    const blob = new Blob([lastResult.markdown], { type: "text/markdown;charset=utf-8" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = lastResult.filename || "itinerario.md";
@@ -447,10 +458,50 @@ downloadBtn.addEventListener("click", async () => {
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
-  } catch (err) {
-    showStatus(err.message, true);
+    hideCopyFallback();
+  } catch {
+    showCopyFallback(lastResult.markdown);
   }
 });
+
+// Se il browser blocca il download: messaggio + testo da copiare a mano
+function showCopyFallback(markdown) {
+  showStatus(
+    "Il browser ha bloccato il download. Controlla le impostazioni dei download del browser, " +
+    "oppure copia il testo qui sotto e salvalo in un file .md.",
+    true
+  );
+  let box = document.getElementById("copy-fallback");
+  if (!box) {
+    box = el("div", "copy-fallback");
+    box.id = "copy-fallback";
+    const label = el("label", null, "Testo dell'itinerario (Markdown)");
+    const area = el("textarea");
+    area.readOnly = true;
+    area.rows = 10;
+    label.append(area);
+    const copy = el("button", "btn-secondary", "Copia testo");
+    copy.type = "button";
+    copy.addEventListener("click", async () => {
+      area.select();
+      try {
+        await navigator.clipboard.writeText(area.value);
+        copy.textContent = "Copiato ✓";
+      } catch {
+        copy.textContent = "Selezionato: premi Ctrl+C";
+      }
+    });
+    box.append(label, copy);
+    itineraryEl.before(box);
+  }
+  box.hidden = false;
+  box.querySelector("textarea").value = markdown;
+}
+
+function hideCopyFallback() {
+  const box = document.getElementById("copy-fallback");
+  if (box) box.hidden = true;
+}
 
 // --- Funzioni di supporto -----------------------------------------------------
 function readPrefs() {
@@ -466,7 +517,13 @@ function readPrefs() {
 }
 
 async function callApi(url, options) {
-  const res = await fetch(url, options);
+  let res;
+  try {
+    res = await fetch(url, options);
+  } catch {
+    // Server spento o connessione assente: il browser darebbe solo "Failed to fetch"
+    throw new Error("Impossibile contattare il server: controlla che sia acceso e che la connessione funzioni.");
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `Errore del server (${res.status})`);
   return data;

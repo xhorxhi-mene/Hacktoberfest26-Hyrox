@@ -45,8 +45,12 @@ def validate_prefs(raw):
             raise ValidationError(f"Valore non valido per '{key}'. Scegli tra: {', '.join(sorted(allowed))}.")
         prefs[key] = value
 
+    raw_people = raw.get("people", 0)
     try:
-        people = int(raw.get("people", 0))
+        # true/false o numeri con la virgola (2.7) non sono un numero di persone valido
+        if isinstance(raw_people, bool) or (isinstance(raw_people, float) and not raw_people.is_integer()):
+            raise ValueError
+        people = int(raw_people)
     except (TypeError, ValueError):
         people = 0
     if not 1 <= people <= MAX_PEOPLE:
@@ -83,10 +87,14 @@ _INJECTION_PATTERNS = [
     # (non "storia" o "programma": nelle note di viaggio hanno un significato normale)
     r"\b(scrivi|genera|crea|write|generate)\b.{0,25}\b(codice|code|script|poesia|poem|canzone|song|racconto|essay)\b",
     r"\b(rispondi|answer|reply)\b.{0,20}\b(solo|soltanto|only)\b",
-    r"</?\s*(itinerario|richiesta|note|system|user|assistant)\b",
+    r"</?\s*(itinerario|richiesta|note\w*|system|user|assistant)\b",  # tag del prompt (es. </note_viaggiatore>)
 ]
 _INJECTION_RE = re.compile("|".join(f"(?:{p})" for p in _INJECTION_PATTERNS), re.IGNORECASE | re.DOTALL)
-_URL_RE = re.compile(r"(https?://|www\.)\S+|\b\S+\.(com|it|net|org|io|ru|xyz)(/\S*)?\b", re.IGNORECASE)
+# Link: "http(s)://" o "www." in qualsiasi forma; domini "nudi" solo se scritti in minuscolo
+# (es. "sito.com"), così "vegetariani.Io preferisco" (spazio dimenticato dopo il punto) non viene bloccato.
+_URL_RE = re.compile(
+    r"(?i:https?://|www\.)\S+|\b[a-z0-9-]{2,}\.(?:com|it|net|org|info|ru|xyz)(?:/\S*)?(?![\w.])"
+)
 
 
 def _ascii_fold(text):
@@ -133,10 +141,13 @@ def clean_free_text(text, limit, where):
 
 # --- Luoghi riconosciuti --------------------------------------------------------
 def _clip(value, limit):
-    """Testo pulito e accorciato; stringa vuota per valori mancanti o strani."""
+    """Testo pulito e accorciato; stringa vuota per valori mancanti o strani.
+    Toglie anche i caratteri invisibili e i simboli che potrebbero chiudere i tag del prompt."""
     if value is None or isinstance(value, (dict, list, bool)):
         return ""
-    return " ".join(str(value).split())[:limit]
+    text = "".join(c for c in str(value) if unicodedata.category(c) != "Cf")
+    text = re.sub(r"[<>{}`\[\]\\|]", "", text)
+    return " ".join(text.split())[:limit]
 
 
 def _normalize_place(raw, index, max_places):
@@ -205,6 +216,19 @@ def check_same_trip(recognition, same_trip, days=DEFAULT_DAYS):
         f"({found}). Carica foto di luoghi della stessa zona{longer}. Se un luogo è stato riconosciuto male, "
         "prova con una foto più nitida in cui si veda bene il monumento o il paesaggio."
     )
+
+
+def check_places_text(recognition):
+    """I luoghi arrivano dalla pagina (e un domani l'utente potrà correggerli): finiscono nel
+    prompt, quindi si applicano gli stessi controlli anti-manipolazione delle note.
+    Niente filtro "testo senza senso": bloccherebbe nomi veri come "Llanfairpwllgwyngyll"."""
+    fields = [recognition.get("country"), recognition.get("region")]
+    for p in recognition.get("places", []):
+        fields += [p.get("name"), p.get("city"), p.get("country")]
+    for value in filter(None, fields):
+        folded = _ascii_fold(value)
+        if _URL_RE.search(folded) or _INJECTION_RE.search(folded):
+            raise ValidationError(f"Il nome del luogo «{value[:40]}» non è valido: scrivi solo il nome del posto.")
 
 
 def recognized_places(recognition):
