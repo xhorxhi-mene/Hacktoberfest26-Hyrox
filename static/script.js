@@ -139,11 +139,7 @@ form.addEventListener("submit", async (event) => {
     });
     lastResult = result;
 
-    // Il server rende già sicuro l'HTML; DOMPurify è una protezione in più (se il CDN è raggiungibile)
-    itineraryEl.innerHTML = window.DOMPurify ? DOMPurify.sanitize(result.html) : result.html;
-    itineraryEl.querySelectorAll("h2, h3").forEach((heading) => {
-      if (/^giorno\s+\d+\b/i.test(heading.textContent.trim())) heading.prepend("📅 ");
-    });
+    renderItinerary(result.html);
 
     const detail = `${destination} · ${prefs.days} ${prefs.days === "1" ? "giorno" : "giorni"} · ${placeNames.length} ${placeNames.length === 1 ? "luogo riconosciuto" : "luoghi riconosciuti"}`;
     setJourneyStage("result", "Itinerario pronto", detail);
@@ -158,6 +154,280 @@ form.addEventListener("submit", async (event) => {
     setBusy(false);
   }
 });
+
+// --- Itinerario a card -----------------------------------------------------------
+// Il server manda l'HTML dell'itinerario (stesso contenuto del file .md). Qui lo
+// dividiamo per sezioni "##" e lo trasformiamo in card. Si spostano solo nodi già
+// sanificati: nessun testo del modello passa da innerHTML costruito a mano.
+
+const SLOT_ICONS = { mattina: "🌅", pomeriggio: "☀️", sera: "🌙" };
+const SECTION_TYPES = [
+  { test: /^il tuo viaggio/, type: "summary" },
+  { test: /^luoghi riconosciuti/, type: "skip" }, // già mostrati sopra, nella sezione dei luoghi
+  { test: /^panoramica/, type: "overview", icon: "🧭" },
+  { test: /^dove dormire/, type: "info", icon: "🏨" },
+  { test: /^come spostarsi/, type: "info", icon: "🚆" },
+  { test: /^budget/, type: "budget", icon: "💶" },
+  { test: /^consigli/, type: "info", icon: "💡" },
+  { test: /^fonti/, type: "info", icon: "🔗" },
+];
+const SUMMARY_ICONS = { durata: "🗓️", budget: "💶", scopo: "🎯", persone: "👥" };
+const SEASON_ICONS = { primavera: "🌸", estate: "☀️", autunno: "🍂", inverno: "❄️" };
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text != null) node.textContent = text;
+  return node;
+}
+
+function iconSpan(icon) {
+  const span = el("span", "itin-icon", icon);
+  span.setAttribute("aria-hidden", "true");
+  return span;
+}
+
+function renderItinerary(html) {
+  const tpl = document.createElement("template");
+  tpl.innerHTML = window.DOMPurify ? DOMPurify.sanitize(html) : html; // HTML già reso sicuro dal server
+  const nodes = [...tpl.content.children];
+
+  // Il "---" finale separa la nota "orari indicativi"; altri "---" scritti dal modello si ignorano
+  const lastHr = nodes.map((n) => n.tagName).lastIndexOf("HR");
+  const hasH2After = lastHr >= 0 && nodes.slice(lastHr).some((n) => n.tagName === "H2");
+  const outro = lastHr >= 0 && !hasH2After ? nodes.slice(lastHr + 1) : [];
+  const main = (lastHr >= 0 && !hasH2After ? nodes.slice(0, lastHr) : nodes).filter((n) => n.tagName !== "HR");
+
+  const intro = [];
+  const sections = [];
+  for (const node of main) {
+    if (node.tagName === "H2") sections.push({ heading: node, body: [] });
+    else if (sections.length) sections.at(-1).body.push(node);
+    else intro.push(node);
+  }
+
+  // Formato inatteso: mostriamo l'HTML così com'è
+  if (!sections.length) {
+    itineraryEl.replaceChildren(tpl.content);
+    return;
+  }
+
+  const header = el("header", "itin-header");
+  const days = [];
+  const others = [];
+  let overview = null;
+
+  for (const node of intro) {
+    if (node.tagName === "H1") {
+      header.append(el("p", "itin-title", node.textContent.replace(/^Itinerario:\s*/i, "")));
+    } else if (node.tagName === "BLOCKQUOTE") {
+      header.append(el("p", "itin-meta", node.textContent.trim()));
+    }
+  }
+
+  for (const section of sections) {
+    const title = section.heading.textContent.trim();
+    const dayMatch = title.match(/^giorno\s*(\d+)\s*[–—:\-.]?\s*(.*)$/i);
+    if (dayMatch) {
+      days.push(buildDayCard(Number(dayMatch[1]), dayMatch[2] || "", section.body));
+      continue;
+    }
+    const kind = SECTION_TYPES.find((s) => s.test.test(title.toLowerCase())) || { type: "info", icon: "📌" };
+    if (kind.type === "skip") continue;
+    if (kind.type === "summary") {
+      header.append(...buildSummary(section.body));
+      continue;
+    }
+    const card = buildInfoCard(title, kind, section.body);
+    if (kind.type === "overview") overview = card;
+    else others.push(card);
+  }
+
+  const parts = [header];
+  if (days.length > 1) parts.push(buildDayNav(days));
+  if (overview) parts.push(overview);
+  if (days.length) {
+    const list = el("div", "day-list");
+    list.append(...days);
+    parts.push(list);
+  }
+  if (others.length) {
+    const grid = el("div", "itin-grid");
+    grid.append(...others);
+    parts.push(grid);
+  }
+  if (outro.length) {
+    const note = el("p", "itin-disclaimer");
+    note.append(iconSpan("ℹ️"), " ", outro.map((n) => n.textContent.trim()).join(" "));
+    parts.push(note);
+  }
+  itineraryEl.replaceChildren(...parts);
+}
+
+// "Il tuo viaggio" (tabella Voce | Scelta) → pillole con icona + eventuale riga delle note
+function buildSummary(body) {
+  const chips = el("ul", "itin-chips");
+  chips.setAttribute("aria-label", "Le tue scelte");
+  let notes = null;
+  for (const row of body.flatMap((n) => [...n.querySelectorAll("tbody tr")])) {
+    const [label, value] = [...row.cells].map((c) => c.textContent.trim());
+    if (!label || !value) continue;
+    const key = label.toLowerCase();
+    if (key === "note") {
+      notes = el("p", "itin-notes");
+      notes.append(iconSpan("📝"), " ", el("strong", null, "Note: "), value);
+      continue;
+    }
+    const icon = key === "periodo" ? SEASON_ICONS[value.toLowerCase()] || "📅" : SUMMARY_ICONS[key] || "•";
+    const chip = el("li", "itin-chip");
+    chip.append(iconSpan(icon), el("span", "visually-hidden", `${label}: `), value);
+    if (key === "persone") chip.lastChild.textContent = `${value} ${value === "1" ? "persona" : "persone"}`;
+    chip.title = label;
+    chips.append(chip);
+  }
+  return notes ? [chips, notes] : [chips];
+}
+
+function buildDayNav(days) {
+  const nav = el("nav", "day-nav");
+  nav.setAttribute("aria-label", "Vai al giorno");
+  const list = el("ul");
+  for (const day of days) {
+    const li = el("li");
+    const link = el("a", null, `G${day.dataset.day}`);
+    link.href = `#${day.id}`;
+    link.setAttribute("aria-label", `Giorno ${day.dataset.day}: ${day.dataset.title}`);
+    link.title = day.dataset.title;
+    link.addEventListener("click", (e) => {
+      e.preventDefault();
+      day.scrollIntoView({ behavior: "smooth", block: "start" });
+      day.focus({ preventScroll: true });
+    });
+    li.append(link);
+    list.append(li);
+  }
+  nav.append(list);
+  return nav;
+}
+
+function buildDayCard(number, title, body) {
+  const card = el("article", "itin-card day-card");
+  card.id = `giorno-${number}`;
+  card.tabIndex = -1; // può ricevere il focus dalla barra dei giorni
+  card.dataset.day = number;
+  card.dataset.title = title || `Giorno ${number}`;
+
+  const head = el("header", "day-head");
+  const heading = el("h3", null);
+  heading.id = `giorno-${number}-titolo`;
+  heading.append(el("span", "day-badge", `Giorno ${number}`), el("span", "day-title", title));
+  card.setAttribute("aria-labelledby", heading.id);
+  head.append(heading);
+  card.append(head);
+
+  // Divide il giorno in fasce (### Mattina / Pomeriggio / Sera)
+  const slots = [];
+  const loose = [];
+  for (const node of body) {
+    if (node.tagName === "H3") slots.push({ label: node.textContent.trim(), nodes: [] });
+    else if (slots.length) slots.at(-1).nodes.push(node);
+    else loose.push(node);
+  }
+
+  const container = el("div", slots.length ? "day-slots" : "day-body");
+  if (loose.length) {
+    const intro = el("div", "day-intro");
+    intro.append(...loose);
+    container.append(intro);
+  }
+  for (const slot of slots) {
+    const key = slot.label.toLowerCase();
+    const box = el("section", `slot slot-${SLOT_ICONS[key] ? key : "altro"}`);
+    const h = el("h4");
+    h.append(iconSpan(SLOT_ICONS[key] || "📍"), " ", slot.label);
+    box.append(h, ...slot.nodes);
+    container.append(box);
+  }
+  card.append(container);
+
+  const moves = extractMoves(container);
+  if (moves.length) {
+    const foot = el("footer", "day-moves");
+    foot.append(iconSpan("🚆"), el("strong", null, "Spostamenti"));
+    const list = el("ul");
+    moves.forEach((m) => {
+      const li = el("li");
+      li.append(m);
+      list.append(li);
+    });
+    foot.append(list);
+    card.append(foot);
+  }
+  return card;
+}
+
+// Sposta le frasi "Spostamento: ..." scritte dal modello in fondo alla card
+function extractMoves(container) {
+  const moves = [];
+  for (let guard = 0; guard < 10; guard++) {
+    const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+    let found = null;
+    let index = -1;
+    while (walker.nextNode()) {
+      index = walker.currentNode.data.search(/Spostament[oi]\s*:/i);
+      if (index !== -1) { found = walker.currentNode; break; }
+    }
+    if (!found) break;
+    const block = found.parentElement.closest("p, li");
+    if (!block) break;
+    const rest = found.splitText(index);
+    let start = rest;
+    while (start.parentNode !== block) start = start.parentNode;
+    const frag = document.createDocumentFragment();
+    for (let cur = start; cur; ) {
+      const next = cur.nextSibling;
+      frag.append(cur);
+      cur = next;
+    }
+    // Toglie l'etichetta "Spostamento:" (anche se era in grassetto)
+    const first = document.createTreeWalker(frag, NodeFilter.SHOW_TEXT);
+    while (first.nextNode()) {
+      const t = first.currentNode;
+      if (/Spostament[oi]\s*:/i.test(t.data)) { t.data = t.data.replace(/^\s*Spostament[oi]\s*:\s*/i, ""); break; }
+    }
+    if (!block.textContent.trim()) block.remove();
+    if (frag.textContent.trim()) moves.push(frag);
+  }
+  return moves;
+}
+
+function buildInfoCard(title, kind, body) {
+  const card = el("section", `itin-card info-card info-${kind.type}`);
+  const heading = el("h3");
+  heading.append(iconSpan(kind.icon), " ", title);
+  const id = `sezione-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  heading.id = id;
+  card.setAttribute("aria-labelledby", id);
+  card.append(heading);
+
+  for (const node of body) {
+    if (node.tagName === "TABLE") {
+      // Tabella scorrevole anche da tastiera; la riga "Totale" viene evidenziata
+      const wrap = el("div", "table-scroll");
+      wrap.tabIndex = 0;
+      wrap.setAttribute("role", "region");
+      wrap.setAttribute("aria-label", title);
+      node.querySelectorAll("tbody tr").forEach((tr) => {
+        if (/totale/i.test(tr.cells[0]?.textContent || "")) tr.classList.add("total-row");
+      });
+      wrap.append(node);
+      card.append(wrap);
+    } else {
+      card.append(node);
+    }
+  }
+  return card;
+}
 
 // --- Download del file .md -----------------------------------------------------
 downloadBtn.addEventListener("click", async () => {

@@ -121,6 +121,7 @@ def clean_free_text(text, limit, where):
     letters = sum(c.isalpha() for c in text)
     if (
         re.search(r"(.)\1{5,}", text)
+        or re.search(r"(\w{2,4})\1{3,}", folded, re.IGNORECASE)  # sillabe ripetute: "hahahaha", "lololol"
         or re.search(r"[bcdfghjklmnpqrstvwxz]{7,}", folded, re.IGNORECASE)
         or (len(text) >= 15 and letters < len(text) * 0.3)
     ):
