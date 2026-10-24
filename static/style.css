@@ -145,9 +145,10 @@ form > section + section { margin-top: 32px; }
   filter: drop-shadow(0 0 20px rgba(34, 211, 238, 0.35));
 }
 
-.globe-map {
-  transform-origin: 90px 90px;
-  animation: globe-spin 18s linear infinite;
+/* I continenti scorrono verso destra: un giro completo = 180 unità (una "piastrella") */
+.globe-land-track {
+  animation: globe-scroll 20s linear infinite;
+  will-change: transform;
 }
 
 .globe-land { fill: #2dd4bf; opacity: 0.8; }
@@ -177,28 +178,41 @@ form > section + section { margin-top: 32px; }
   content: "";
 }
 
-.story-orbit-one { animation: orbit-drift 3s linear infinite; }
-.story-orbit-two { width: 194px; height: 66px; opacity: 0.38; transform: rotate(38deg); animation: orbit-drift 4s linear infinite reverse; }
-
-.story-plane-orbit {
-  position: absolute;
-  z-index: 2;
-  width: 198px;
-  height: 198px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 180ms ease;
+/* L'anello 1 resta fermo: è la "pista" dell'aeroplanino. L'anello 2 ondeggia piano, senza scatti. */
+.story-orbit-two {
+  width: 194px;
+  height: 66px;
+  opacity: 0.38;
+  transform: rotate(38deg);
+  animation: orbit-breathe 5s ease-in-out infinite alternate;
 }
 
+/* Contenitore 240×240 centrato sul globo. Niente z-index né transform: così l'aereo
+   può passare sia davanti (z-index 3) sia dietro (z-index 0) al globo (z-index 1). */
+.story-plane-orbit {
+  position: absolute;
+  width: 240px;
+  height: 240px;
+  pointer-events: none;
+  transition: opacity 400ms ease;
+}
+
+/* Percorso = stessa ellisse dell'anello 1 (218×78, inclinata di -27°), in senso orario:
+   metà superiore dietro il globo, metà inferiore davanti, da destra verso sinistra,
+   cioè in senso opposto ai continenti. */
 .story-plane {
   position: absolute;
   top: 0;
-  left: 50%;
-  width: 24px;
-  height: 24px;
+  left: 0;
+  width: 22px;
+  height: 22px;
   color: #a5f3fc;
   filter: drop-shadow(0 0 7px rgba(34, 211, 238, 0.9));
-  transform: translateX(-50%);
+  offset-path: path("M 22.88 169.49 C 13.10 150.30 48.65 112.58 102.29 85.25 C 155.93 57.92 207.34 51.32 217.12 70.51 C 226.90 89.70 191.35 127.42 137.71 154.75 C 84.07 182.08 32.66 188.68 22.88 169.49 Z");
+  offset-anchor: center;
+  offset-rotate: auto 45deg; /* il disegno punta in alto a destra: lo giro verso la direzione di volo */
+  animation: plane-fly 9s linear infinite;
+  will-change: offset-distance;
 }
 
 .story-check {
@@ -223,39 +237,14 @@ form > section + section { margin-top: 32px; }
   height: 32px;
 }
 
-.story-result {
-  position: absolute;
-  z-index: 3;
-  display: grid;
-  width: min(240px, 90%);
-  gap: 5px;
-  padding: 15px 17px;
-  border: 1px solid rgba(45, 212, 191, 0.35);
-  border-radius: 15px;
-  background: rgba(13, 29, 43, 0.96);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), 0 0 25px rgba(45, 212, 191, 0.14);
-  opacity: 0;
-  text-align: left;
-  transform: translateY(10px) scale(0.94);
-  transition: opacity 350ms ease, transform 350ms ease;
-}
-
-.story-result-label { color: #5eead4; font-size: 0.61rem; font-weight: 750; letter-spacing: 0.12em; }
-.story-result strong { overflow: hidden; color: var(--text); font-size: 0.96rem; text-overflow: ellipsis; white-space: nowrap; }
-.story-result > span:last-child { color: var(--muted); font-size: 0.75rem; }
-
+/* La velocità di globo e aereo cambia gradualmente via JavaScript (setMotionSpeed in script.js):
+   qui cambiano solo luci e visibilità, così le animazioni non saltano mai.
+   Globo e aeroplanino restano sempre visibili e in movimento, senza scritte sopra:
+   destinazione e dettagli dell'itinerario vanno nel testo sopra il globo. */
+.globe-art { transition: filter 600ms ease; }
 .journey-story[data-stage="searching"] .globe-art { filter: drop-shadow(0 0 26px rgba(34, 211, 238, 0.55)); }
-.journey-story[data-stage="searching"] .globe-map { animation-duration: 2.4s; }
-.journey-story[data-stage="searching"] .story-orbit { animation-duration: 1.6s; }
-.journey-story[data-stage="searching"] .story-plane-orbit { opacity: 1; animation: plane-orbit 3.2s linear infinite; }
-.journey-story[data-stage="found"] .globe-map,
-.journey-story[data-stage="found"] .story-orbit,
-.journey-story[data-stage="found"] .story-plane-orbit { animation-play-state: paused; }
-.journey-story[data-stage="found"] .story-plane-orbit { opacity: 0; }
 .journey-story[data-stage="found"] .story-check { opacity: 1; transform: scale(1); }
-.journey-story[data-stage="result"] .story-globe { opacity: 0; transform: scale(0.78); }
-.journey-story[data-stage="result"] .story-check { opacity: 0; transform: scale(0.7); }
-.journey-story[data-stage="result"] .story-result { opacity: 1; transform: translateY(0) scale(1); }
+.journey-story[data-stage="result"] .globe-art { filter: drop-shadow(0 0 24px rgba(16, 185, 129, 0.45)); }
 
 .story-steps {
   display: flex;
@@ -271,19 +260,28 @@ form > section + section { margin-top: 32px; }
 .story-steps .is-complete { color: #94a3b8; }
 .story-steps .is-complete b { color: #2dd4bf; }
 
-@keyframes globe-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+@keyframes globe-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(180px); }
 }
 
-@keyframes orbit-drift {
-  from { margin-left: -5px; }
-  to { margin-left: 5px; }
+@keyframes orbit-breathe {
+  from { translate: -4px 2px; }
+  to { translate: 4px -2px; }
 }
 
-@keyframes plane-orbit {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+/* 0-50%: metà dietro il globo (più piccolo e sbiadito); 50-100%: metà davanti.
+   Il cambio di z-index avviene ai lati, dove l'aereo è fuori dal globo, quindi non si vede.
+   Nota: si usa transform: scale() e NON la proprietà "scale", che verrebbe applicata prima
+   del percorso e rimpicciolirebbe anche la traiettoria. */
+@keyframes plane-fly {
+  0%     { offset-distance: 0%;    z-index: 0; transform: scale(0.8);  opacity: 0.75; }
+  25%    { offset-distance: 25%;   z-index: 0; transform: scale(0.62); opacity: 0.4; }
+  49.9%  { offset-distance: 49.9%; z-index: 0; transform: scale(0.8);  opacity: 0.75; }
+  50%    { offset-distance: 50%;   z-index: 3; transform: scale(0.8);  opacity: 0.75; }
+  75%    { offset-distance: 75%;   z-index: 3; transform: scale(1.08); opacity: 1; }
+  99.9%  { offset-distance: 99.9%; z-index: 3; transform: scale(0.8);  opacity: 0.75; }
+  100%   { offset-distance: 100%;  z-index: 0; transform: scale(0.8);  opacity: 0.75; }
 }
 
 .dropzone {

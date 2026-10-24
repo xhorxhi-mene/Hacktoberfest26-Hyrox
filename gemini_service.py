@@ -41,12 +41,29 @@ def is_mock():
     return os.getenv("MOCK_MODE", "0") == "1"
 
 
+PLACEHOLDER_KEY = "incolla_qui_la_tua_chiave"  # testo di esempio di .env.example
+
+
+def key_problem():
+    """Restituisce un messaggio se la chiave manca o è ancora quella di esempio, altrimenti None."""
+    key = (os.getenv("GEMINI_API_KEY") or "").strip()
+    if not key:
+        return "Chiave API mancante: aggiungi GEMINI_API_KEY nel file .env."
+    if key == PLACEHOLDER_KEY:
+        return (
+            "Nel file .env c'è ancora il testo di esempio al posto della chiave: "
+            "incolla la tua GEMINI_API_KEY (da aistudio.google.com/apikey) e riavvia il server."
+        )
+    return None
+
+
 def _get_client():
     global _client
     if _client is None:
-        key = os.getenv("GEMINI_API_KEY")
-        if not key:
-            raise AIError("Chiave API mancante: controlla GEMINI_API_KEY nel file .env.", 500)
+        problem = key_problem()
+        if problem:
+            raise AIError(problem, 500)
+        key = os.getenv("GEMINI_API_KEY").strip()
         _client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=TIMEOUT_MS))
     return _client
 

@@ -16,8 +16,6 @@ const downloadBtn = document.getElementById("download-btn");
 const journeyStory = document.getElementById("journey-story");
 const journeyHeading = document.getElementById("journey-heading");
 const journeyDescription = document.getElementById("journey-description");
-const storyResultTitle = document.getElementById("story-result-title");
-const storyResultDetail = document.getElementById("story-result-detail");
 
 const MAX_IMAGES = window.MAX_IMAGES || 6;
 const MAX_IMAGE_MB = 10;
@@ -146,9 +144,8 @@ form.addEventListener("submit", async (event) => {
       if (/^giorno\s+\d+\b/i.test(heading.textContent.trim())) heading.prepend("📅 ");
     });
 
-    storyResultTitle.textContent = destination;
-    storyResultDetail.textContent = `Itinerario di ${prefs.days} giorni · ${placeNames.length} ${placeNames.length === 1 ? "luogo riconosciuto" : "luoghi riconosciuti"}`;
-    setJourneyStage("result", "Il tuo viaggio prende forma", "Ecco il tuo itinerario, creato a partire dalle destinazioni riconosciute.");
+    const detail = `${destination} · ${prefs.days} giorni · ${placeNames.length} ${placeNames.length === 1 ? "luogo riconosciuto" : "luoghi riconosciuti"}`;
+    setJourneyStage("result", "Itinerario pronto", detail);
 
     itinerarySection.hidden = false;
     setTimeout(() => itinerarySection.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
@@ -254,8 +251,36 @@ function setBusy(value) {
   submitBtn.textContent = value ? "Elaborazione in corso... ⏳" : "Crea il mio itinerario ✨";
 }
 
+// --- Velocità del globo e dell'aeroplanino ------------------------------------------
+// Velocità per ogni fase (1 = normale). Il cambio è graduale: niente scatti.
+const MOTION_SPEED = { idle: 1, searching: 3.5, found: 1, result: 1, error: 0.6 };
+let motionSpeed = 1;
+let motionFrame = null;
+
+function motionAnimations() {
+  return [".globe-land-track", ".story-plane", ".story-orbit-two"]
+    .flatMap((sel) => [...journeyStory.querySelectorAll(sel)])
+    .flatMap((el) => (el.getAnimations ? el.getAnimations() : []));
+}
+
+function setMotionSpeed(target, duration = 900) {
+  cancelAnimationFrame(motionFrame);
+  const start = motionSpeed;
+  const t0 = performance.now();
+  const step = (now) => {
+    const k = Math.min(1, (now - t0) / duration);
+    const eased = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2; // accelera e frena dolcemente
+    motionSpeed = start + (target - start) * eased;
+    // Cambiare playbackRate mantiene la posizione attuale dell'animazione
+    motionAnimations().forEach((anim) => (anim.playbackRate = motionSpeed));
+    if (k < 1) motionFrame = requestAnimationFrame(step);
+  };
+  motionFrame = requestAnimationFrame(step);
+}
+
 function setJourneyStage(stage, heading, description) {
   const order = ["searching", "found", "result"];
+  setMotionSpeed(MOTION_SPEED[stage] ?? 1);
   journeyStory.dataset.stage = stage;
   journeyHeading.textContent = heading;
   journeyDescription.textContent = description;

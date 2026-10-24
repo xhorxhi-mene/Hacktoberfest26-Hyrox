@@ -58,7 +58,14 @@ def index():
 @app.get("/api/health")
 def health():
     """Controllo veloce che il server sia acceso."""
-    return jsonify({"ok": True, "mock": gemini_service.is_mock(), "model": gemini_service.model_name()})
+    return jsonify(
+        {
+            "ok": True,
+            "mock": gemini_service.is_mock(),
+            "model": gemini_service.model_name(),
+            "key_configured": gemini_service.key_problem() is None,
+        }
+    )
 
 
 @app.post("/api/recognize")
@@ -182,5 +189,7 @@ def handle_unexpected(exc):
 
 
 if __name__ == "__main__":
+    if not gemini_service.is_mock() and gemini_service.key_problem():
+        log.warning("ATTENZIONE: %s (oppure usa MOCK_MODE=1 per i dati di prova)", gemini_service.key_problem())
     port = int(os.getenv("PORT", "8000"))
     app.run(debug=True, port=port)

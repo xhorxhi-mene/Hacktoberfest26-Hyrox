@@ -89,6 +89,7 @@
         <div class="story-scene" aria-hidden="true">
           <div class="story-orbit story-orbit-one"></div>
           <div class="story-orbit story-orbit-two"></div>
+          <!-- Aeroplanino: segue l'anello in senso opposto alla rotazione della Terra -->
           <div class="story-plane-orbit">
             <svg class="story-plane" viewBox="0 0 32 32" fill="none">
               <path d="m28 4-8 24-5-10-10-5 23-9Z" fill="currentColor"/>
@@ -104,15 +105,32 @@
                   <stop offset="0.6" stop-color="#0e354b"/>
                   <stop offset="1" stop-color="#091b32"/>
                 </radialGradient>
+                <!-- Ombra ai bordi + riflesso: danno l'effetto di una sfera -->
+                <radialGradient id="globe-depth" cx="50%" cy="50%" r="50%">
+                  <stop offset="0.55" stop-color="#020617" stop-opacity="0"/>
+                  <stop offset="0.85" stop-color="#020617" stop-opacity="0.35"/>
+                  <stop offset="1" stop-color="#020617" stop-opacity="0.75"/>
+                </radialGradient>
+                <radialGradient id="globe-light" cx="34%" cy="28%" r="45%">
+                  <stop offset="0" stop-color="#e0f2fe" stop-opacity="0.22"/>
+                  <stop offset="1" stop-color="#e0f2fe" stop-opacity="0"/>
+                </radialGradient>
               </defs>
               <circle class="globe-surface" cx="90" cy="90" r="75" fill="url(#globe-shade)"/>
               <g class="globe-map" clip-path="url(#globe-clip)">
+                <!-- I continenti scorrono da sinistra a destra (come la Terra vista dall'equatore).
+                     La copia spostata di 180 rende lo scorrimento continuo, senza salti. -->
                 <g class="globe-land">
-                  <path d="m25 61 10-13 17-5 8 7 14-3 8 8-7 9-14 2-5 10-11 2-4 12-11-4-2-13-9-4z"/>
-                  <path d="m72 94 12 3 9 13-4 13-7 13-5 17-9-7 1-16-7-12 3-13z"/>
-                  <path d="m99 55 10-9 17 2 5 7 15 2 6 9-7 7-13-2-8 8-10-3-5 8-11-5-3-11-9-3z"/>
-                  <path d="m111 91 13-5 13 5 6 13-6 12-3 17-11 7-8-10-2-14-8-8z"/>
-                  <path d="m151 116 8 4 4 10-8 5-7-8z"/>
+                  <g class="globe-land-track">
+                    <g id="globe-land-tile">
+                      <path d="m25 61 10-13 17-5 8 7 14-3 8 8-7 9-14 2-5 10-11 2-4 12-11-4-2-13-9-4z"/>
+                      <path d="m72 94 12 3 9 13-4 13-7 13-5 17-9-7 1-16-7-12 3-13z"/>
+                      <path d="m99 55 10-9 17 2 5 7 15 2 6 9-7 7-13-2-8 8-10-3-5 8-11-5-3-11-9-3z"/>
+                      <path d="m111 91 13-5 13 5 6 13-6 12-3 17-11 7-8-10-2-14-8-8z"/>
+                      <path d="m151 116 8 4 4 10-8 5-7-8z"/>
+                    </g>
+                    <use href="#globe-land-tile" x="-180"/>
+                  </g>
                 </g>
                 <g class="globe-grid">
                   <ellipse cx="90" cy="90" rx="30" ry="75"/>
@@ -120,6 +138,8 @@
                   <path d="M15 90h150M23 59c39 15 95 15 134 0M23 121c39-15 95-15 134 0"/>
                 </g>
               </g>
+              <circle cx="90" cy="90" r="75" fill="url(#globe-depth)"/>
+              <circle cx="90" cy="90" r="75" fill="url(#globe-light)"/>
               <circle class="globe-rim" cx="90" cy="90" r="75"/>
             </svg>
           </div>
@@ -128,11 +148,6 @@
               <path d="m8 16 5.5 5.5L24 11" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </span>
-          <div class="story-result" id="story-result" aria-hidden="true">
-            <span class="story-result-label">ITINERARIO PRONTO</span>
-            <strong id="story-result-title"></strong>
-            <span id="story-result-detail"></span>
-          </div>
         </div>
         <div class="story-steps" aria-hidden="true">
           <span data-story-step="searching"><b>01</b> Ricerca</span>
