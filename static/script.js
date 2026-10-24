@@ -1,8 +1,10 @@
-// Logica della pagina: anteprime, chiamate al server, risultati, download.
+// Logica della pagina: scelta foto (clic + drag & drop), chiamate al server, risultati, download.
 
 const form = document.getElementById("trip-form");
+const dropzone = document.getElementById("dropzone");
 const input = document.getElementById("images");
 const previews = document.getElementById("previews");
+const photoCount = document.getElementById("photo-count");
 const statusEl = document.getElementById("status");
 const submitBtn = document.getElementById("submit-btn");
 const placesSection = document.getElementById("places-section");
@@ -11,19 +13,45 @@ const countryEl = document.getElementById("country");
 const itinerarySection = document.getElementById("itinerary-section");
 const itineraryEl = document.getElementById("itinerary");
 const downloadBtn = document.getElementById("download-btn");
-const photoCount = document.getElementById("photo-count");
+const journeyStory = document.getElementById("journey-story");
+const journeyHeading = document.getElementById("journey-heading");
+const journeyDescription = document.getElementById("journey-description");
+const storyResultTitle = document.getElementById("story-result-title");
+const storyResultDetail = document.getElementById("story-result-detail");
 
 const MAX_IMAGES = window.MAX_IMAGES || 6;
 const MAX_IMAGE_MB = 10;
-let selectedFiles = []; // foto scelte finora (si accumulano a ogni "aggiungi")
-let photoUrls = [];     // anteprime delle foto, per mostrarle accanto ai luoghi
-const urlCache = new Map(); // un solo URL di anteprima per file
-let lastResult = null;  // ultimo itinerario generato (per il download)
+let selectedFiles = [];       // foto scelte finora: si accumulano a ogni aggiunta
+let photoUrls = [];           // anteprime, nello stesso ordine di selectedFiles
+const urlCache = new Map();   // un solo URL di anteprima per file
+let lastResult = null;        // ultimo itinerario generato (per il download)
+let busy = false;
 
-// --- Scelta delle foto: si aggiungono a quelle già scelte ----------------------
+// --- Scelta delle foto (clic + drag & drop): si aggiungono a quelle già scelte ----
+["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+  dropzone.addEventListener(eventName, (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  });
+});
+["dragenter", "dragover"].forEach((eventName) => {
+  dropzone.addEventListener(eventName, () => !busy && dropzone.classList.add("dragover"));
+});
+["dragleave", "drop"].forEach((eventName) => {
+  dropzone.addEventListener(eventName, () => dropzone.classList.remove("dragover"));
+});
+dropzone.addEventListener("drop", (e) => {
+  if (!busy && e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+});
+
 input.addEventListener("change", () => {
+  addFiles(input.files);
+  input.value = ""; // così si può riscegliere anche un file appena rimosso
+});
+
+function addFiles(fileList) {
   const problems = [];
-  for (const file of input.files) {
+  for (const file of fileList) {
     const already = selectedFiles.some(
       (f) => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
     );
@@ -38,10 +66,9 @@ input.addEventListener("change", () => {
     }
     selectedFiles.push(file);
   }
-  input.value = ""; // così si può riscegliere anche lo stesso file dopo averlo rimosso
   showStatus(problems.join(" "), problems.length > 0);
   renderPreviews();
-});
+}
 
 function renderPreviews() {
   previews.innerHTML = "";
@@ -56,14 +83,15 @@ function renderPreviews() {
     img.src = url;
     img.alt = `Foto ${i + 1}`;
     const cap = document.createElement("figcaption");
-    cap.textContent = `Foto ${i + 1}`;
+    cap.textContent = `${i + 1}. ${selectedFiles[i].name}`;
+    cap.title = selectedFiles[i].name;
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "remove-photo";
     remove.textContent = "✕";
     remove.title = "Rimuovi questa foto";
     remove.setAttribute("aria-label", `Rimuovi foto ${i + 1}`);
-    remove.disabled = submitBtn.disabled;
+    remove.disabled = busy;
     remove.addEventListener("click", () => {
       selectedFiles.splice(i, 1);
       showStatus("");
@@ -73,9 +101,7 @@ function renderPreviews() {
     previews.append(fig);
   });
 
-  photoCount.textContent = selectedFiles.length
-    ? `${selectedFiles.length}/${MAX_IMAGES} foto scelte`
-    : "";
+  photoCount.textContent = selectedFiles.length ? `${selectedFiles.length}/${MAX_IMAGES} foto scelte` : "";
 }
 
 // --- Invio del modulo ---------------------------------------------------------
@@ -84,31 +110,51 @@ form.addEventListener("submit", async (event) => {
   const files = selectedFiles.slice(0, MAX_IMAGES);
   if (!files.length) return showStatus("Carica almeno una foto.", true);
 
+  const prefs = readPrefs(); // letto prima di disabilitare i campi
   setBusy(true);
   placesSection.hidden = true;
   itinerarySection.hidden = true;
 
   try {
-    // Passo 1: riconoscimento dei luoghi
-    showStatus("1/2 · Gemma sta riconoscendo i luoghi…");
+    // Passo 1: riconoscimento
+    setJourneyStage("searching", "Sto esplorando il mondo", "Le tue foto sono in viaggio: stiamo cercando i luoghi che le hanno ispirate.");
+    showStatus("1/2 · Gemma sta riconoscendo i luoghi… 🔍");
     const formData = new FormData();
     files.forEach((file) => formData.append("images", file));
     const recognition = await callApi("/api/recognize", { method: "POST", body: formData });
     renderPlaces(recognition);
+    const placeNames = (recognition.places || [])
+      .map((place) => place.name)
+      .filter((name) => name && name !== "Non riconosciuto");
+    const destination = [recognition.region, recognition.country].filter(Boolean).join(", ")
+      || placeNames.slice(0, 2).join(", ")
+      || "La tua destinazione";
+    setJourneyStage("found", "Destinazione individuata", destination);
 
     // Passo 2: itinerario
-    showStatus("2/2 · Gemma sta creando l'itinerario (può richiedere fino a un minuto)…");
+    showStatus("2/2 · Gemma sta creando l'itinerario (può richiedere fino a un minuto)… ✍️");
     const result = await callApi("/api/itinerary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ recognition, prefs: readPrefs() }),
+      body: JSON.stringify({ recognition, prefs }),
     });
     lastResult = result;
-    itineraryEl.innerHTML = result.html; // HTML già reso sicuro dal server
+
+    // Il server rende già sicuro l'HTML; DOMPurify è una protezione in più (se il CDN è raggiungibile)
+    itineraryEl.innerHTML = window.DOMPurify ? DOMPurify.sanitize(result.html) : result.html;
+    itineraryEl.querySelectorAll("h2, h3").forEach((heading) => {
+      if (/^giorno\s+\d+\b/i.test(heading.textContent.trim())) heading.prepend("📅 ");
+    });
+
+    storyResultTitle.textContent = destination;
+    storyResultDetail.textContent = `Itinerario di ${prefs.days} giorni · ${placeNames.length} ${placeNames.length === 1 ? "luogo riconosciuto" : "luoghi riconosciuti"}`;
+    setJourneyStage("result", "Il tuo viaggio prende forma", "Ecco il tuo itinerario, creato a partire dalle destinazioni riconosciute.");
+
     itinerarySection.hidden = false;
-    itinerarySection.scrollIntoView({ behavior: "smooth" });
-    showStatus("Fatto! ✅");
+    setTimeout(() => itinerarySection.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
+    showStatus("Fatto! Il tuo itinerario è pronto. ✅");
   } catch (err) {
+    setJourneyStage("error", "Ricerca interrotta", "Non siamo riusciti a completare questo passaggio: leggi il messaggio sotto il pulsante.");
     showStatus(err.message, true);
   } finally {
     setBusy(false);
@@ -129,8 +175,10 @@ downloadBtn.addEventListener("click", async () => {
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = lastResult.filename || "itinerario.md";
+    document.body.appendChild(link);
     link.click();
-    URL.revokeObjectURL(link.href);
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   } catch (err) {
     showStatus(err.message, true);
   }
@@ -145,7 +193,7 @@ function readPrefs() {
     season: f.season.value,
     purpose: f.purpose.value,
     people: Number(f.people.value),
-    notes: f.notes ? f.notes.value : "", // campo note disattivato per ora
+    notes: f.notes ? f.notes.value.trim() : "", // campo note disattivato per ora
   };
 }
 
@@ -169,7 +217,8 @@ function renderPlaces(recognition) {
     if (photo) {
       const img = document.createElement("img");
       img.src = photo;
-      img.alt = place.name || "";
+      img.alt = place.name || "Luogo";
+      img.loading = "lazy";
       card.append(img);
     }
 
@@ -183,9 +232,9 @@ function renderPlaces(recognition) {
     desc.textContent = place.description || "";
     const conf = document.createElement("span");
     conf.className = `conf conf-${place.confidence || "bassa"}`;
-    conf.textContent = `affidabilità: ${place.confidence || "?"}`;
-    body.append(title, where, desc, conf);
+    conf.textContent = `Affidabilità: ${place.confidence || "?"}`;
 
+    body.append(title, where, desc, conf);
     card.append(body);
     placesEl.append(card);
   });
@@ -194,12 +243,26 @@ function renderPlaces(recognition) {
 
 function showStatus(message, isError = false) {
   statusEl.textContent = message;
-  statusEl.classList.toggle("error", isError);
+  statusEl.className = isError ? "status error" : "status";
 }
 
-function setBusy(busy) {
-  submitBtn.disabled = busy;
-  input.disabled = busy; // niente aggiunte o rimozioni mentre Gemma lavora
-  previews.querySelectorAll(".remove-photo").forEach((b) => (b.disabled = busy));
-  submitBtn.textContent = busy ? "Attendi…" : "Crea il mio itinerario ✨";
+function setBusy(value) {
+  busy = value;
+  submitBtn.disabled = value;
+  // Niente modifiche a campi e foto mentre Gemma lavora
+  form.querySelectorAll("input, select, textarea, .remove-photo").forEach((el) => (el.disabled = value));
+  submitBtn.textContent = value ? "Elaborazione in corso... ⏳" : "Crea il mio itinerario ✨";
+}
+
+function setJourneyStage(stage, heading, description) {
+  const order = ["searching", "found", "result"];
+  journeyStory.dataset.stage = stage;
+  journeyHeading.textContent = heading;
+  journeyDescription.textContent = description;
+  journeyStory.querySelectorAll("[data-story-step]").forEach((step) => {
+    const stepIndex = order.indexOf(step.dataset.storyStep);
+    const currentIndex = order.indexOf(stage);
+    step.classList.toggle("is-active", stepIndex === currentIndex);
+    step.classList.toggle("is-complete", currentIndex > stepIndex);
+  });
 }

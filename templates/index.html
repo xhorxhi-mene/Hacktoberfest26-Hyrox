@@ -3,24 +3,31 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>PhotoOO Travel Planner</title>
+  <title>Pics Travel Planner | AI Powered</title>
+  <!-- Sicurezza: DOMPurify per evitare attacchi XSS quando si stampa HTML dal server -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="hero">
-    <h1>📸 Photo Travel Planner</h1>
-    <p>Carica le foto dei posti che sogni: Gemma 4 li riconosce e crea il tuo itinerario.</p>
-    {% if mock %}<p class="badge">MOCK_MODE attivo: dati di prova, nessuna chiamata all'API</p>{% endif %}
+    <h1>Pics Travel Planner</h1>
+    <p>Carica le foto dei posti che sogni: <strong>Gemma 4</strong> li riconosce e crea il tuo itinerario ideale.</p>
+    <p class="badge">IL TUO PROSSIMO VIAGGIO, ISPIRATO DALLE TUE FOTO</p>
+    {% if mock %}<p class="badge mock-badge">MOCK_MODE: dati di prova</p>{% endif %}
   </header>
 
   <main>
-    <form id="trip-form" class="card">
+    <form id="trip-form" class="card form-card">
       <!-- 1. Foto -->
       <section>
         <h2>1. Le tue foto</h2>
-        <label class="dropzone" for="images">
+        <label class="dropzone" for="images" id="dropzone">
           <input id="images" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple>
-          <span>Clicca per aggiungere foto, fino a {{ max_images }} (JPG, PNG, WEBP, HEIC · max 10 MB l'una).<br>Puoi aggiungerle una alla volta e rimuoverle con ✕.</span>
+          <span class="upload-icon" aria-hidden="true">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </span>
+          <span class="upload-title">Trascina qui le tue foto</span>
+          <span class="upload-hint">oppure clicca per aggiungerle · fino a {{ max_images }} foto (JPG, PNG, WEBP, HEIC · max 10 MB l'una)<br>Puoi aggiungerle una alla volta e rimuoverle con ✕</span>
         </label>
         <p id="photo-count" class="muted photo-count"></p>
         <div id="previews" class="previews"></div>
@@ -72,18 +79,84 @@
       <p id="status" class="status" role="status"></p>
     </form>
 
-    <!-- 3. Luoghi riconosciuti -->
-    <section id="places-section" class="card" hidden>
-      <h2>📍 Luoghi riconosciuti</h2>
-      <p id="country" class="muted"></p>
-      <div id="places" class="places"></div>
-    </section>
+    <div class="results-column">
+      <section class="journey-story card" id="journey-story" data-stage="idle" aria-labelledby="journey-heading">
+        <div class="story-copy">
+          <span class="story-eyebrow">LA TUA AVVENTURA, IN TEMPO REALE</span>
+          <h2 id="journey-heading">Il mondo ti aspetta</h2>
+          <p id="journey-description">Le tue foto sono il punto di partenza. Troviamo insieme la prossima destinazione.</p>
+        </div>
+        <div class="story-scene" aria-hidden="true">
+          <div class="story-orbit story-orbit-one"></div>
+          <div class="story-orbit story-orbit-two"></div>
+          <div class="story-plane-orbit">
+            <svg class="story-plane" viewBox="0 0 32 32" fill="none">
+              <path d="m28 4-8 24-5-10-10-5 23-9Z" fill="currentColor"/>
+              <path d="m15 18 8-8" stroke="#082d3b" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="story-globe">
+            <svg class="globe-art" viewBox="0 0 180 180" fill="none">
+              <defs>
+                <clipPath id="globe-clip"><circle cx="90" cy="90" r="75"/></clipPath>
+                <radialGradient id="globe-shade" cx="35%" cy="28%">
+                  <stop offset="0" stop-color="#164e63"/>
+                  <stop offset="0.6" stop-color="#0e354b"/>
+                  <stop offset="1" stop-color="#091b32"/>
+                </radialGradient>
+              </defs>
+              <circle class="globe-surface" cx="90" cy="90" r="75" fill="url(#globe-shade)"/>
+              <g class="globe-map" clip-path="url(#globe-clip)">
+                <g class="globe-land">
+                  <path d="m25 61 10-13 17-5 8 7 14-3 8 8-7 9-14 2-5 10-11 2-4 12-11-4-2-13-9-4z"/>
+                  <path d="m72 94 12 3 9 13-4 13-7 13-5 17-9-7 1-16-7-12 3-13z"/>
+                  <path d="m99 55 10-9 17 2 5 7 15 2 6 9-7 7-13-2-8 8-10-3-5 8-11-5-3-11-9-3z"/>
+                  <path d="m111 91 13-5 13 5 6 13-6 12-3 17-11 7-8-10-2-14-8-8z"/>
+                  <path d="m151 116 8 4 4 10-8 5-7-8z"/>
+                </g>
+                <g class="globe-grid">
+                  <ellipse cx="90" cy="90" rx="30" ry="75"/>
+                  <ellipse cx="90" cy="90" rx="57" ry="75"/>
+                  <path d="M15 90h150M23 59c39 15 95 15 134 0M23 121c39-15 95-15 134 0"/>
+                </g>
+              </g>
+              <circle class="globe-rim" cx="90" cy="90" r="75"/>
+            </svg>
+          </div>
+          <span class="story-check">
+            <svg viewBox="0 0 32 32" fill="none">
+              <path d="m8 16 5.5 5.5L24 11" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <div class="story-result" id="story-result" aria-hidden="true">
+            <span class="story-result-label">ITINERARIO PRONTO</span>
+            <strong id="story-result-title"></strong>
+            <span id="story-result-detail"></span>
+          </div>
+        </div>
+        <div class="story-steps" aria-hidden="true">
+          <span data-story-step="searching"><b>01</b> Ricerca</span>
+          <span data-story-step="found"><b>02</b> Trovato</span>
+          <span data-story-step="result"><b>03</b> Itinerario</span>
+        </div>
+      </section>
+
+      <!-- 3. Luoghi riconosciuti -->
+      <section id="places-section" class="card" hidden>
+        <h2>📍 Luoghi riconosciuti</h2>
+        <p id="country" class="muted"></p>
+        <div id="places" class="places"></div>
+      </section>
+    </div>
 
     <!-- 4. Itinerario -->
-    <section id="itinerary-section" class="card" hidden>
+    <section id="itinerary-section" class="card itinerary-card" hidden>
       <div class="row">
         <h2>🗺️ Il tuo itinerario</h2>
-        <button id="download-btn" type="button">⬇️ Scarica .md</button>
+        <button id="download-btn" type="button" class="btn-secondary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:6px; vertical-align:text-bottom"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Scarica .md
+        </button>
       </div>
       <article id="itinerary" class="itinerary"></article>
     </section>
