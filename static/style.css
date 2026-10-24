@@ -63,7 +63,25 @@ section + section { margin-top: 24px; }
 .dropzone input { display: block; margin: 0 auto 8px; }
 
 .previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; margin-top: 12px; }
-.previews figure { margin: 0; }
+.previews figure { margin: 0; position: relative; }
+.remove-photo {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(29, 27, 42, 0.75);
+  color: #fff;
+  font-size: 0.9rem;
+  line-height: 28px;
+  cursor: pointer;
+}
+.remove-photo:hover { background: var(--error); }
+.remove-photo:disabled { opacity: 0.4; cursor: not-allowed; }
+.photo-count { margin: 8px 0 0; font-size: 0.85rem; }
 .previews img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; }
 .previews figcaption { font-size: 0.8rem; color: var(--muted); text-align: center; }
 

@@ -19,9 +19,10 @@
       <section>
         <h2>1. Le tue foto</h2>
         <label class="dropzone" for="images">
-          <input id="images" name="images" type="file" accept="image/jpeg,image/png,image/webp" multiple>
-          <span>Clicca per scegliere fino a {{ max_images }} foto (JPG, PNG, WEBP · max 5 MB l'una)</span>
+          <input id="images" type="file" accept="image/jpeg,image/png,image/webp,image/heic,image/heif,.heic,.heif" multiple>
+          <span>Clicca per aggiungere foto, fino a {{ max_images }} (JPG, PNG, WEBP, HEIC · max 10 MB l'una).<br>Puoi aggiungerle una alla volta e rimuoverle con ✕.</span>
         </label>
+        <p id="photo-count" class="muted photo-count"></p>
         <div id="previews" class="previews"></div>
       </section>
 
@@ -60,9 +61,11 @@
             <input name="people" type="number" min="1" max="{{ max_people }}" value="2" required>
           </label>
         </div>
+        {# Note disattivate per ora (anche il server le ignora: validation.NOTES_ENABLED)
         <label class="full">Note (facoltative)
           <textarea name="notes" rows="2" maxlength="500" placeholder="Es. viaggiamo con un bambino, siamo vegetariani, niente musei troppo lunghi…"></textarea>
         </label>
+        #}
       </section>
 
       <button id="submit-btn" type="submit">Crea il mio itinerario ✨</button>

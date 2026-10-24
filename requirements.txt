@@ -2,4 +2,5 @@ flask>=3.0
 google-genai>=1.0
 python-dotenv>=1.0
 markdown>=3.5
-gunicorn
+pillow>=10.0
+pillow-heif>=0.16

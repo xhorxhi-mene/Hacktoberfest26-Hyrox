@@ -6,6 +6,8 @@ from datetime import date
 
 import markdown as md_lib
 
+from validation import recognized_places
+
 LABELS = {
     "budget": {"basso": "Basso", "medio": "Medio", "alto": "Alto"},
     "season": {"estate": "Estate", "inverno": "Inverno"},
@@ -31,12 +33,17 @@ def build_markdown(recognition, prefs, itinerary_text, sources):
         f"| Persone | {prefs['people']} |",
     ]
     if prefs.get("notes"):
-        lines.append(f"| Note | {prefs['notes'].replace('|', '/')} |")
+        notes = " ".join(prefs["notes"].split()).replace("|", "/")
+        lines.append(f"| Note | {notes} |")
 
     lines += ["", "## Luoghi riconosciuti dalle tue foto", ""]
-    for p in recognition.get("places", []):
+    for p in recognized_places(recognition):
         where = ", ".join(x for x in (p.get("city"), p.get("country")) if x)
-        lines.append(f"- **{p.get('name', '?')}** – {where} *(affidabilità: {p.get('confidence', '?')})*")
+        if p.get("confidence") == "manuale":
+            detail = "inserito da te"
+        else:
+            detail = f"affidabilità: {p.get('confidence', '?')}"
+        lines.append(f"- **{p['name']}**" + (f" – {where}" if where else "") + f" *({detail})*")
 
     lines += ["", itinerary_text.strip(), ""]
 

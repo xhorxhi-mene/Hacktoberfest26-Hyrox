@@ -11,22 +11,45 @@ const countryEl = document.getElementById("country");
 const itinerarySection = document.getElementById("itinerary-section");
 const itineraryEl = document.getElementById("itinerary");
 const downloadBtn = document.getElementById("download-btn");
+const photoCount = document.getElementById("photo-count");
 
 const MAX_IMAGES = window.MAX_IMAGES || 6;
+const MAX_IMAGE_MB = 10;
+let selectedFiles = []; // foto scelte finora (si accumulano a ogni "aggiungi")
 let photoUrls = [];     // anteprime delle foto, per mostrarle accanto ai luoghi
+const urlCache = new Map(); // un solo URL di anteprima per file
 let lastResult = null;  // ultimo itinerario generato (per il download)
 
-// --- Anteprime delle foto ---------------------------------------------------
+// --- Scelta delle foto: si aggiungono a quelle già scelte ----------------------
 input.addEventListener("change", () => {
-  photoUrls.forEach(URL.revokeObjectURL);
-  previews.innerHTML = "";
-  const files = [...input.files];
-  if (files.length > MAX_IMAGES) {
-    showStatus(`Massimo ${MAX_IMAGES} foto: verranno usate solo le prime ${MAX_IMAGES}.`, true);
-  } else {
-    showStatus("");
+  const problems = [];
+  for (const file of input.files) {
+    const already = selectedFiles.some(
+      (f) => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified
+    );
+    if (already) continue;
+    if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+      problems.push(`${file.name} supera ${MAX_IMAGE_MB} MB.`);
+      continue;
+    }
+    if (selectedFiles.length >= MAX_IMAGES) {
+      problems.push(`Massimo ${MAX_IMAGES} foto: rimuovine una per aggiungerne altre.`);
+      break;
+    }
+    selectedFiles.push(file);
   }
-  photoUrls = files.slice(0, MAX_IMAGES).map((file) => URL.createObjectURL(file));
+  input.value = ""; // così si può riscegliere anche lo stesso file dopo averlo rimosso
+  showStatus(problems.join(" "), problems.length > 0);
+  renderPreviews();
+});
+
+function renderPreviews() {
+  previews.innerHTML = "";
+  photoUrls = selectedFiles.map((file) => {
+    if (!urlCache.has(file)) urlCache.set(file, URL.createObjectURL(file));
+    return urlCache.get(file);
+  });
+
   photoUrls.forEach((url, i) => {
     const fig = document.createElement("figure");
     const img = document.createElement("img");
@@ -34,15 +57,31 @@ input.addEventListener("change", () => {
     img.alt = `Foto ${i + 1}`;
     const cap = document.createElement("figcaption");
     cap.textContent = `Foto ${i + 1}`;
-    fig.append(img, cap);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-photo";
+    remove.textContent = "✕";
+    remove.title = "Rimuovi questa foto";
+    remove.setAttribute("aria-label", `Rimuovi foto ${i + 1}`);
+    remove.disabled = submitBtn.disabled;
+    remove.addEventListener("click", () => {
+      selectedFiles.splice(i, 1);
+      showStatus("");
+      renderPreviews();
+    });
+    fig.append(img, remove, cap);
     previews.append(fig);
   });
-});
+
+  photoCount.textContent = selectedFiles.length
+    ? `${selectedFiles.length}/${MAX_IMAGES} foto scelte`
+    : "";
+}
 
 // --- Invio del modulo ---------------------------------------------------------
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const files = [...input.files].slice(0, MAX_IMAGES);
+  const files = selectedFiles.slice(0, MAX_IMAGES);
   if (!files.length) return showStatus("Carica almeno una foto.", true);
 
   setBusy(true);
@@ -106,7 +145,7 @@ function readPrefs() {
     season: f.season.value,
     purpose: f.purpose.value,
     people: Number(f.people.value),
-    notes: f.notes.value,
+    notes: f.notes ? f.notes.value : "", // campo note disattivato per ora
   };
 }
 
@@ -160,5 +199,7 @@ function showStatus(message, isError = false) {
 
 function setBusy(busy) {
   submitBtn.disabled = busy;
+  input.disabled = busy; // niente aggiunte o rimozioni mentre Gemma lavora
+  previews.querySelectorAll(".remove-photo").forEach((b) => (b.disabled = busy));
   submitBtn.textContent = busy ? "Attendi…" : "Crea il mio itinerario ✨";
 }
