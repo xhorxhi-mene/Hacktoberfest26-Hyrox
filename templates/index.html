@@ -39,9 +39,9 @@
         <div class="grid">
           <label>Durata
             <select name="days">
-              <option value="3">3 giorni</option>
-              <option value="4">4 giorni</option>
-              <option value="5">5 giorni</option>
+              {% for d in range(1, max_days + 1) %}
+              <option value="{{ d }}"{% if d == 3 %} selected{% endif %}>{{ d }} {{ "giorno" if d == 1 else "giorni" }}</option>
+              {% endfor %}
             </select>
           </label>
           <label>Budget
@@ -53,7 +53,9 @@
           </label>
           <label>Periodo
             <select name="season">
-              <option value="estate">Estate</option>
+              <option value="primavera">Primavera</option>
+              <option value="estate" selected>Estate</option>
+              <option value="autunno">Autunno</option>
               <option value="inverno">Inverno</option>
             </select>
           </label>
@@ -68,11 +70,9 @@
             <input name="people" type="number" min="1" max="{{ max_people }}" value="2" required>
           </label>
         </div>
-        {# Note disattivate per ora (anche il server le ignora: validation.NOTES_ENABLED)
         <label class="full">Note (facoltative)
-          <textarea name="notes" rows="2" maxlength="500" placeholder="Es. viaggiamo con un bambino, siamo vegetariani, niente musei troppo lunghi…"></textarea>
+          <textarea name="notes" rows="2" maxlength="300" placeholder="Es. viaggiamo con un bambino, siamo vegetariani, niente musei troppo lunghi…"></textarea>
         </label>
-        #}
       </section>
 
       <button id="submit-btn" type="submit">Crea il mio itinerario ✨</button>

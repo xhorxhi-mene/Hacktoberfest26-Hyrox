@@ -1,14 +1,19 @@
 """Controllo dei dati che arrivano dalla pagina e normalizzazione delle risposte di Gemma."""
 
+import re
+import unicodedata
+
+MIN_DAYS, MAX_DAYS = 1, 10
+DEFAULT_DAYS = 5  # usato dal riconoscimento se la pagina non manda la durata
 OPTIONS = {
-    "days": {"3", "4", "5"},
+    "days": {str(d) for d in range(MIN_DAYS, MAX_DAYS + 1)},
     "budget": {"basso", "medio", "alto"},
-    "season": {"estate", "inverno"},
+    "season": {"primavera", "estate", "autunno", "inverno"},
     "purpose": {"divertimento", "cultura", "mix"},
 }
 MAX_PEOPLE = 10
-MAX_NOTES = 500
-NOTES_ENABLED = False  # note libere disattivate per ora: il server le ignora
+MAX_NOTES = 300
+NOTES_ENABLED = True
 MAX_REQUEST = 300
 MAX_TEXT = 30_000
 
@@ -35,6 +40,8 @@ def validate_prefs(raw):
     for key, allowed in OPTIONS.items():
         value = str(raw.get(key, "")).strip().lower()
         if value not in allowed:
+            if key == "days":
+                raise ValidationError(f"La durata deve essere tra {MIN_DAYS} e {MAX_DAYS} giorni.")
             raise ValidationError(f"Valore non valido per '{key}'. Scegli tra: {', '.join(sorted(allowed))}.")
         prefs[key] = value
 
@@ -47,8 +54,80 @@ def validate_prefs(raw):
     prefs["people"] = people
 
     notes = raw.get("notes") if NOTES_ENABLED else None
-    prefs["notes"] = str(notes).strip()[:MAX_NOTES] if notes else ""
+    prefs["notes"] = clean_free_text(notes, MAX_NOTES, "nelle note") if isinstance(notes, str) else ""
     return prefs
+
+
+def parse_days(value):
+    """Durata per il riconoscimento: se manca o non è valida si usa DEFAULT_DAYS."""
+    value = str(value or "").strip()
+    return int(value) if value in OPTIONS["days"] else DEFAULT_DAYS
+
+
+def days_label(days):
+    """'1 giorno', '3 giorni'..."""
+    return f"{days} giorno" if str(days) == "1" else f"{days} giorni"
+
+
+# --- Testo libero (note, richieste di modifica): protezione da prompt injection --------
+# Frasi tipiche di chi prova a dare ordini al modello invece di descrivere il viaggio.
+_INJECTION_PATTERNS = [
+    r"\b(ignora|ignorare|dimentica|dimenticare|trascura|ignore|forget|disregard|override)\b.{0,40}"
+    r"\b(istruzion\w*|prompt|regol\w*|precedent\w*|instructions?|rules?|previous|above)\b",
+    r"\b(system|developer)\s*(prompt|message|mode)\b",
+    r"\b(prompt|istruzioni|messaggio)\s+(di\s+)?sistema\b",
+    r"\b(sei|ora sei|adesso sei|da ora sei)\s+(un|una|il|la)\s+(assistente|ai|chatbot|modello|hacker|programmatore)\b",
+    r"\b(you are now|act as|pretend to be|fingi di essere|comportati come|impersona)\b",
+    r"\b(jailbreak|dan mode|do anything now)\b",
+    r"\b(rivela|mostra|stampa|ripeti|reveal|print|show|repeat)\b.{0,30}\b(prompt|istruzion\w*|instructions?|chiave|api key|password)\b",
+    # (non "storia" o "programma": nelle note di viaggio hanno un significato normale)
+    r"\b(scrivi|genera|crea|write|generate)\b.{0,25}\b(codice|code|script|poesia|poem|canzone|song|racconto|essay)\b",
+    r"\b(rispondi|answer|reply)\b.{0,20}\b(solo|soltanto|only)\b",
+    r"</?\s*(itinerario|richiesta|note|system|user|assistant)\b",
+]
+_INJECTION_RE = re.compile("|".join(f"(?:{p})" for p in _INJECTION_PATTERNS), re.IGNORECASE | re.DOTALL)
+_URL_RE = re.compile(r"(https?://|www\.)\S+|\b\S+\.(com|it|net|org|io|ru|xyz)(/\S*)?\b", re.IGNORECASE)
+
+
+def _ascii_fold(text):
+    """Toglie gli accenti, così 'è' e 'e' vengono controllati allo stesso modo."""
+    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
+
+
+def clean_free_text(text, limit, where):
+    """Pulisce un testo scritto dall'utente e lo rifiuta se sembra un tentativo di
+    manipolare il modello o se non ha senso. `where` es. "nelle note". Restituisce il testo pulito."""
+    # Caratteri invisibili (zero-width ecc., usati per spezzare le parole e nascondere istruzioni)
+    # → eliminati; a capo e tabulazioni → spazio
+    text = "".join(
+        "" if unicodedata.category(c) == "Cf" else " " if unicodedata.category(c) == "Cc" else c for c in text
+    )
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    if len(text) > limit:
+        raise ValidationError(f"Testo troppo lungo {where}: massimo {limit} caratteri.")
+
+    folded = _ascii_fold(text)
+    if _URL_RE.search(folded):
+        raise ValidationError(f"Non inserire link {where}.")
+    if _INJECTION_RE.search(folded):
+        raise ValidationError(
+            f"Il testo {where} sembra contenere istruzioni per l'AI invece di informazioni sul viaggio. "
+            "Scrivi solo preferenze, ad esempio: «siamo vegetariani», «niente musei lunghi»."
+        )
+
+    # Testo senza senso: lettere ripetute, sequenze di consonanti, quasi solo simboli
+    letters = sum(c.isalpha() for c in text)
+    if (
+        re.search(r"(.)\1{5,}", text)
+        or re.search(r"[bcdfghjklmnpqrstvwxz]{7,}", folded, re.IGNORECASE)
+        or (len(text) >= 15 and letters < len(text) * 0.3)
+    ):
+        raise ValidationError(f"Il testo {where} non sembra comprensibile: scrivi una frase chiara.")
+
+    # Simboli che potrebbero chiudere i tag del prompt o formattare codice
+    return re.sub(r"[<>{}`\[\]\\]", "", text).strip()
 
 
 # --- Luoghi riconosciuti --------------------------------------------------------
@@ -111,17 +190,18 @@ def align_to_images(recognition, n_images):
     return recognition
 
 
-def check_same_trip(recognition, same_trip):
-    """Ferma il flusso se Gemma dice che i luoghi non stanno in un unico viaggio."""
+def check_same_trip(recognition, same_trip, days=DEFAULT_DAYS):
+    """Ferma il flusso se Gemma dice che i luoghi non stanno in un unico viaggio della durata scelta."""
     places = recognized_places(recognition)
     if same_trip or len(places) < 2:
         return
     found = "; ".join(
         f"foto {p['image']}: {p['name']}" + (f" ({p['country']})" if p["country"] else "") for p in places
     )
+    longer = f" oppure aumenta la durata del viaggio" if int(days) < MAX_DAYS else ""
     raise ValidationError(
-        "Le foto sembrano mostrare luoghi troppo lontani tra loro per un unico viaggio di 3-5 giorni "
-        f"({found}). Carica foto di luoghi della stessa zona. Se un luogo è stato riconosciuto male, "
+        f"Le foto sembrano mostrare luoghi troppo lontani tra loro per un viaggio di {days_label(days)} "
+        f"({found}). Carica foto di luoghi della stessa zona{longer}. Se un luogo è stato riconosciuto male, "
         "prova con una foto più nitida in cui si veda bene il monumento o il paesaggio."
     )
 
@@ -153,4 +233,7 @@ def validate_modify(text, request_text):
         raise ValidationError("Scrivi cosa vuoi cambiare nell'itinerario.")
     if len(request_text) > MAX_REQUEST:
         raise ValidationError(f"La richiesta di modifica può avere al massimo {MAX_REQUEST} caratteri.")
+    request_text = clean_free_text(request_text, MAX_REQUEST, "nella richiesta di modifica")
+    if not request_text:
+        raise ValidationError("Scrivi cosa vuoi cambiare nell'itinerario.")
     return text, request_text

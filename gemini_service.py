@@ -13,7 +13,13 @@ from google import genai
 from google.genai import types
 
 import prompts
-from validation import align_to_images, check_same_trip, normalize_recognition, recognized_places
+from validation import (
+    DEFAULT_DAYS,
+    align_to_images,
+    check_same_trip,
+    normalize_recognition,
+    recognized_places,
+)
 
 log = logging.getLogger(__name__)
 
@@ -124,8 +130,9 @@ def _response_text(response):
 
 
 # --- Passo 1: riconoscere i luoghi ---------------------------------------------
-def recognize_places(images):
-    """images = lista di byte JPEG. Restituisce {"country", "region", "places": [...]}."""
+def recognize_places(images, days=DEFAULT_DAYS):
+    """images = lista di byte JPEG; days = durata scelta (serve per capire se i luoghi
+    stanno in un unico viaggio). Restituisce {"country", "region", "places": [...]}."""
     if is_mock():
         return normalize_recognition(_mock_recognition(len(images)), len(images))
 
@@ -133,7 +140,7 @@ def recognize_places(images):
     config = {"system_instruction": prompts.RECOGNIZE_SYSTEM, "temperature": 0.2}
 
     for attempt in (1, 2):  # se il JSON è sbagliato riprova una volta
-        response = _generate([*parts, prompts.recognize_prompt(len(images))], config)
+        response = _generate([*parts, prompts.recognize_prompt(len(images), days)], config)
         text = _response_text(response)
         try:
             data = _extract_json(text)
@@ -144,7 +151,7 @@ def recognize_places(images):
         raise AIError("Gemma ha risposto in un formato inatteso: riprova.", 502)
 
     recognition = align_to_images(normalize_recognition(data, len(images)), len(images))
-    check_same_trip(recognition, _same_trip(data))  # solleva ValidationError → 400
+    check_same_trip(recognition, _same_trip(data), days)  # solleva ValidationError → 400
 
     # Se Gemma non ha indicato il paese ma i luoghi sono tutti nello stesso, usiamo quello
     countries = {p["country"] for p in recognized_places(recognition) if p["country"]}

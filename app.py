@@ -19,7 +19,9 @@ from image_utils import InvalidImage, prepare_image  # noqa: E402
 from markdown_builder import build_markdown, make_filename, to_html  # noqa: E402
 from rate_limit import ai_limiter, limited  # noqa: E402
 from validation import (  # noqa: E402
+    MAX_DAYS,
     MAX_PEOPLE,
+    parse_days,
     ValidationError,
     normalize_recognition,
     recognized_places,
@@ -52,6 +54,7 @@ def index():
         mock=gemini_service.is_mock(),
         max_images=MAX_IMAGES,
         max_people=MAX_PEOPLE,
+        max_days=MAX_DAYS,
     )
 
 
@@ -85,7 +88,8 @@ def recognize():
             return error(f"{f.filename} supera {MAX_IMAGE_MB} MB.")
         images.append(prepare_image(data, f.filename))  # solleva InvalidImage → 400
 
-    result = gemini_service.recognize_places(images)
+    # Durata scelta (facoltativa): serve a Gemma per capire se i luoghi stanno in un unico viaggio
+    result = gemini_service.recognize_places(images, parse_days(request.form.get("days")))
     if not recognized_places(result):
         result["warning"] = (
             "Non sono riuscito a riconoscere nessun luogo: prova con foto più nitide, in cui si veda bene "

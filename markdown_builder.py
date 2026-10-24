@@ -6,11 +6,11 @@ from datetime import date
 
 import markdown as md_lib
 
-from validation import recognized_places
+from validation import days_label, recognized_places
 
 LABELS = {
     "budget": {"basso": "Basso", "medio": "Medio", "alto": "Alto"},
-    "season": {"estate": "Estate", "inverno": "Inverno"},
+    "season": {"primavera": "Primavera", "estate": "Estate", "autunno": "Autunno", "inverno": "Inverno"},
     "purpose": {"divertimento": "Divertimento", "cultura": "Cultura", "mix": "Cultura + divertimento"},
 }
 
@@ -18,7 +18,7 @@ LABELS = {
 def build_markdown(recognition, prefs, itinerary_text, sources):
     area = recognition.get("region") or recognition.get("country") or "Viaggio"
     lines = [
-        f"# Itinerario: {area} – {prefs['days']} giorni",
+        f"# Itinerario: {area} – {days_label(prefs['days'])}",
         "",
         f"> Creato il {date.today().strftime('%d/%m/%Y')} con Gemma 4 (Gemini API).",
         "",
@@ -26,7 +26,7 @@ def build_markdown(recognition, prefs, itinerary_text, sources):
         "",
         "| Voce | Scelta |",
         "|---|---|",
-        f"| Durata | {prefs['days']} giorni |",
+        f"| Durata | {days_label(prefs['days'])} |",
         f"| Budget | {LABELS['budget'][prefs['budget']]} |",
         f"| Periodo | {LABELS['season'][prefs['season']]} |",
         f"| Scopo | {LABELS['purpose'][prefs['purpose']]} |",
@@ -67,5 +67,5 @@ def make_filename(recognition, prefs):
     area = recognition.get("region") or recognition.get("country") or "viaggio"
     ascii_area = unicodedata.normalize("NFKD", area).encode("ascii", "ignore").decode()
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_area.lower()).strip("-") or "viaggio"
-    return f"itinerario-{slug}-{prefs['days']}-giorni.md"
+    return f"itinerario-{slug}-{days_label(prefs['days']).replace(' ', '-')}.md"
 

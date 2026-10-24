@@ -119,6 +119,7 @@ form.addEventListener("submit", async (event) => {
     showStatus("1/2 · Gemma sta riconoscendo i luoghi… 🔍");
     const formData = new FormData();
     files.forEach((file) => formData.append("images", file));
+    formData.append("days", prefs.days); // serve per capire se i luoghi stanno in un unico viaggio
     const recognition = await callApi("/api/recognize", { method: "POST", body: formData });
     renderPlaces(recognition);
     const placeNames = (recognition.places || [])
@@ -144,7 +145,7 @@ form.addEventListener("submit", async (event) => {
       if (/^giorno\s+\d+\b/i.test(heading.textContent.trim())) heading.prepend("📅 ");
     });
 
-    const detail = `${destination} · ${prefs.days} giorni · ${placeNames.length} ${placeNames.length === 1 ? "luogo riconosciuto" : "luoghi riconosciuti"}`;
+    const detail = `${destination} · ${prefs.days} ${prefs.days === "1" ? "giorno" : "giorni"} · ${placeNames.length} ${placeNames.length === 1 ? "luogo riconosciuto" : "luoghi riconosciuti"}`;
     setJourneyStage("result", "Itinerario pronto", detail);
 
     itinerarySection.hidden = false;
@@ -190,7 +191,7 @@ function readPrefs() {
     season: f.season.value,
     purpose: f.purpose.value,
     people: Number(f.people.value),
-    notes: f.notes ? f.notes.value.trim() : "", // campo note disattivato per ora
+    notes: f.notes ? f.notes.value.trim() : "",
   };
 }
 
